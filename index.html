@@ -839,7 +839,8 @@ function openExpense(){
 
 /* ---------- INVERSIÓN ---------- */
 function investList(kind){return Object.keys(S.invest).map(function(k){return S.invest[k];}).filter(function(r){return !r.del&&r.kind===kind;}).sort(function(a,b){return a.ts-b.ts;});}
-function mercInicial(){var t=0,n={},k,e;for(k in S.entries){e=S.entries[k];if(e.del||e.type!=='inicial')continue;t+=e.qty*(e.cost||0);n[e.pid]=1;}return {total:r2(t),n:Object.keys(n).length};}
+function openTs(){var t=Infinity,k,x;for(k in S.sales){x=S.sales[k];if(!x.del&&x.ts<t)t=x.ts;}return t;}
+function mercInicial(){var t=0,n={},k,e,o=openTs();for(k in S.entries){e=S.entries[k];if(e.del)continue;if(e.type==='inicial'||(e.type==='entrada'&&e.ts<o)){t+=e.qty*(e.cost||0);n[e.pid]=1;}}return {total:r2(t),n:Object.keys(n).length};}
 function profitToDate(){
   var days={},k;
   for(k in S.sales){if(!S.sales[k].del)days[S.sales[k].day]=1;}
@@ -859,16 +860,49 @@ function viewInvest(){
   ap.forEach(function(a){var k=a.who||'Sin nombre';if(a.who)named=true;if(!groups[k]){groups[k]={m:0,u:0};order.push(k);}groups[k].m+=a.amount;groups[k].u+=a.usd||0;});
   if(named&&tAp>0)h+='<div class="card"><h4>Por inversionista</h4>'+order.map(function(k){var g=groups[k];return row('<b>'+esc(k)+'</b> <small class="muted">'+Math.round(g.m/tAp*100)+'%</small>',money(g.m)+(g.u?' · '+fmt(g.u)+' USD':''));}).join('')+'</div>';
   h+='<div class="card" style="padding-bottom:10px"><h4>Aportes de capital</h4>'+(ap.length?ap.map(function(a){
-    return '<button class="item" data-act="inv-edit" data-id="'+a.id+'"><div><b>'+esc(a.who||a.desc)+'</b><small>'+(a.who?esc(a.desc)+' · ':'')+shortDate(a.ts)+(a.usd?' · '+fmt(a.usd)+' USD × '+fmt(a.rate):'')+'</small></div><b>'+money(a.amount)+'</b></button>';
-  }).join('')+row('Total aportado',money(tAp)+(tUsd?' · '+fmt(tUsd)+' USD':''),'sum'):'<p class="muted" style="margin:0 0 6px">Aún no hay aportes.</p>')+'<button class="btn" data-act="inv-aporte" style="width:100%;margin-top:8px">+ Agregar aporte</button></div>';
+    return '<button class="item" data-act="inv-edit" data-id="'+a.id+'"><div><b>'+esc(a.who||a.desc)+'</b><small>'+(a.who?esc(a.desc)+' · ':'')+shortDate(a.ts)+(a.usd?' · '+fmt(a.usd)+' USD × '+fmt(a.rate):'')+(a.from?' · préstamo de '+esc(a.from)+' devuelto':'')+'</small></div><b>'+money(a.amount)+'</b></button>';
+  }).join('')+row('Total aportado',money(tAp)+(tUsd?' · '+fmt(tUsd)+' USD':''),'sum'):'<p class="muted" style="margin:0 0 6px">Aún no hay aportes.</p>')+'<button class="btn" data-act="inv-aporte" style="width:100%;margin-top:8px">+ Agregar aporte</button>'+(whoNames().length>1?'<button class="btn" data-act="repay-open" style="width:100%;margin-top:8px">Un inversionista devuelve el préstamo de otro</button>':'')+'</div>';
   h+='<div class="card" style="padding-bottom:10px"><h4>En qué se invirtió</h4>'+ga.map(function(g){
     return '<button class="item" data-act="inv-edit" data-id="'+g.id+'"><div><b>'+esc(g.desc)+'</b><small>'+shortDate(g.ts)+'</small></div><b>'+money(g.amount)+'</b></button>';
   }).join('')+(mi.n?row('Mercancía inicial <small class="muted">('+mi.n+' productos)</small>',money(mi.total)):'')+row('Total invertido',money(tInv),'sum')+'<button class="btn" data-act="inv-gasto" style="width:100%;margin-top:8px">+ Agregar gasto de inversión</button></div>';
-  var reinv=r2(sum(Object.keys(S.entries).map(function(k){return S.entries[k];}).filter(function(e){return !e.del&&e.type==='entrada';}),function(e){return e.qty*(e.cost||0);}));
-  h+='<div class="card"><h4>Reinversión</h4>'+row('Mercancía comprada después de abrir',money(reinv),'sum')+'<p class="help" style="margin:6px 0 0">Cada compra que registras con <b>+ Entrada</b> en Inventario cuenta aquí. Sale del dinero de las ventas, así que no hay que anotarla como aporte.</p></div>';
+  var opened=openTs(),reinv=opened===Infinity?0:r2(sum(Object.keys(S.entries).map(function(k){return S.entries[k];}).filter(function(e){return !e.del&&e.type==='entrada'&&e.ts>=opened;}),function(e){return e.qty*(e.cost||0);}));
+  h+='<div class="card"><h4>Reinversión</h4>'+(opened===Infinity?'<p class="help" style="margin:0">El mercado aún no ha abierto: lo que compres ahora cuenta como <b>mercancía inicial</b>. Cuando haya ventas, las compras nuevas que registres con <b>+ Entrada</b> aparecerán aquí como reinversión.</p>':row('Mercancía comprada después de abrir',money(reinv),'sum')+'<p class="help" style="margin:6px 0 0">Sale del dinero de las ventas, así que no hay que anotarla como aporte.</p>')+'</div>';
   h+='<div class="card"><h4>Recuperación de la inversión</h4>'+row('Ganancia neta acumulada','<span class="'+(prof>=0?'pos':'neg')+'">'+money(prof)+'</span>')+row('Por recuperar',money(Math.max(pend,0)),'sum')+
     '<div style="height:12px;background:var(--bg);border-radius:6px;overflow:hidden;margin:10px 0 4px"><div style="height:100%;width:'+pct+'%;background:var(--brand)"></div></div><div class="muted" style="font-size:14px">'+(tInv>0&&prof>=tInv?'Inversión recuperada 🎉':pct+'% recuperado')+'</div></div>';
   return h;
+}
+function openRepay(from,to,keepTot){
+  var names=whoNames();if(names.length<2){toast('Se necesitan al menos dos inversionistas');return;}
+  var ap=investList('aporte');
+  if(!from){var lf=ap.filter(function(a){return a.who&&/pr[eé]stamo/i.test(a.desc||'');})[0];from=lf?lf.who:names[0];}
+  if(!to||to===from){var o=names.filter(function(n){return n!==from;});to=o[0]||'';}
+  var items=ap.filter(function(a){return a.who===from;});
+  ui.rp={from:from,ids:items.map(function(a){return a.id;})};
+  openModal('<h3>Devolver préstamo</h3><p class="help">Cuando otro inversionista paga un préstamo, ese aporte pasa a ser suyo: la inversión y su parte de las ganancias cambian de dueño. El monto en CUP no cambia; se anota cuántos USD se pagaron.</p>'+
+  '<label>Préstamo de<select id="rp-from">'+names.map(function(n){return '<option value="'+esc(n)+'"'+(n===from?' selected':'')+'>'+esc(n)+'</option>';}).join('')+'</select></label>'+
+  '<label>Lo devuelve (nuevo dueño)<input id="rp-to" list="whos2" autocomplete="off" value="'+esc(to)+'"></label><datalist id="whos2">'+names.filter(function(n){return n!==from;}).map(function(n){return '<option value="'+esc(n)+'">';}).join('')+'</datalist>'+
+  '<label>Total devuelto (USD)<input id="rp-tot" inputmode="decimal" placeholder="Ej. 300" value="'+esc(keepTot||'')+'"></label>'+
+  items.map(function(a){return '<div class="card" style="padding:10px"><label style="display:flex;gap:10px;align-items:center;color:var(--ink);margin:0"><input type="checkbox" id="rp-c-'+a.id+'" checked style="width:auto;min-height:0"><span style="flex:1"><b>'+esc(a.desc)+'</b><br><small class="muted">'+shortDate(a.ts)+' · '+money(a.amount)+'</small></span></label><label>USD de este aporte<input id="rp-u-'+a.id+'" inputmode="decimal"></label><div class="help" id="rp-r-'+a.id+'"></div></div>';}).join('')+
+  '<button class="btn primary big" data-act="repay-save">Confirmar devolución</button>');
+  if(keepTot)repayFill('tot');
+}
+function repayFill(src){
+  var ids=(ui.rp&&ui.rp.ids)||[],sel=ids.filter(function(id){var c=$('#rp-c-'+id);return c&&c.checked;}),i,a,tot,sa=0,u;
+  sel.forEach(function(id){sa+=S.invest[id].amount;});
+  if(src==='line'){tot=0;sel.forEach(function(id){tot+=num(val('rp-u-'+id));});if($('#rp-tot'))$('#rp-tot').value=tot?String(r2(tot)):'';}
+  else{tot=num(val('rp-tot'));ids.forEach(function(id){var e=$('#rp-u-'+id);if(!e)return;e.value=(sel.indexOf(id)>-1&&tot>0&&sa>0)?String(r2(tot*S.invest[id].amount/sa)):'';});}
+  ids.forEach(function(id){var r=$('#rp-r-'+id);if(!r)return;u=num(val('rp-u-'+id));r.textContent=(sel.indexOf(id)>-1&&u>0)?'Cambio implícito: '+fmt(S.invest[id].amount/u)+' CUP por USD':'';});
+}
+function saveRepay(){
+  var from=ui.rp&&ui.rp.from,to=val('rp-to').trim();
+  if(!to||to===from){toast('Indica quién lo devuelve');return;}
+  var sel=ui.rp.ids.filter(function(id){var c=$('#rp-c-'+id);return c&&c.checked;});
+  if(!sel.length){toast('Elige al menos un aporte');return;}
+  for(var i=0;i<sel.length;i++){if(!(num(val('rp-u-'+sel[i]))>0)){toast('Indica los USD devueltos');return;}}
+  var old=sel.map(function(id){return Object.assign({},S.invest[id]);});
+  sel.forEach(function(id){var a=S.invest[id],u=num(val('rp-u-'+id));put('invest',Object.assign({},a,{who:to,from:a.from||a.who,usd:r2(u),rate:Math.round(a.amount/u*10000)/10000,repTs:Date.now()}));});
+  closeModal();
+  toast('Listo: ahora son de '+to,'Deshacer',function(){old.forEach(function(o){put('invest',o);});render();toast('Devolución deshecha');});
 }
 function openAporte(id){
   var r=id?S.invest[id]:null,usd=!!(r&&r.usd>0);
@@ -999,6 +1033,8 @@ var H={
   'prod-edit':function(t){openProduct(t.dataset.id);},
   'prod-save':function(t){saveProduct(t.dataset.id||null);},
   'modal-close':function(){closeModal();},
+  'repay-open':function(){openRepay();},
+  'repay-save':saveRepay,
   'prod-del':function(t){
     var id=t.dataset.id,p=S.products[id];if(!p)return;
     if(hasSales(id)){toast('Ya tiene ventas registradas. Usa Archivar para ocultarlo.');return;}
@@ -1118,6 +1154,8 @@ document.addEventListener('input',function(e){
   else if(t.id==='p-sms')smsRead();
   else if(t.id==='e-sacks'||t.id==='e-kgs'||t.id==='e-sackcost')sackCalc();
   else if(t.id==='w-g')updateW();
+  else if(t.id==='rp-tot')repayFill('tot');
+  else if(t.id&&t.id.indexOf('rp-u-')===0)repayFill('line');
   else if(t.id==='p-cup'||t.id==='p-usd'||t.id==='p-tr')refreshTotals();
   else if(t.id==='v-amt'||t.id==='v-cur'||t.id==='v-rate')updateAp();
   else if(t.id==='f-cost'||t.id==='f-ccur'||t.id==='f-margin')updateSugg();
@@ -1128,6 +1166,8 @@ document.addEventListener('input',function(e){
 document.addEventListener('change',function(e){
   var t=e.target;
   if(t.id==='dayin'&&t.value){ui.day=t.value;render();}
+  else if(t.id==='rp-from')openRepay(t.value,val('rp-to'),'');
+  else if(t.id&&t.id.indexOf('rp-c-')===0)repayFill('tot');
   else if(t.id==='restorefile'&&t.files&&t.files[0])restore(t.files[0]);
 });
 document.addEventListener('keydown',function(e){if(e.key==='Escape')closeModal();});
