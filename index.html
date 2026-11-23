@@ -65,6 +65,9 @@ label input,label select,label textarea{margin-top:4px;color:var(--ink);font-siz
 .sheet{background:var(--card);width:100%;max-width:560px;max-height:92vh;overflow:auto;border-radius:18px 18px 0 0;padding:16px 16px calc(16px + env(safe-area-inset-bottom))}
 @media (min-width:700px){.scrim{align-items:center}.sheet{border-radius:18px}}
 .sheet h3{margin:0 0 12px;font-size:18px}
+.mclose{float:right;margin:-4px -4px 6px 10px;width:42px;height:42px;border-radius:50%;border:1px solid var(--line);background:var(--bg);color:var(--ink);font-size:19px;line-height:1;cursor:pointer;padding:0}
+.hist button.hx{border:0;background:none;color:var(--bad);font-size:15px;padding:2px 6px;cursor:pointer}
+.wtgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:8px 0}.wtgrid .btn{display:flex;flex-direction:column;align-items:center;gap:2px}.wtgrid .btn small{font-weight:400;color:var(--muted)}
 .cl{border-bottom:1px solid var(--line);padding:8px 0}
 .cl .cn{font-weight:600}.cl .cn small{color:var(--muted);font-weight:400;margin-left:6px}
 .cl .cc{display:grid;grid-template-columns:auto 1fr 1fr auto;gap:6px;align-items:center;margin-top:6px}
@@ -73,6 +76,7 @@ label input,label select,label textarea{margin-top:4px;color:var(--ink);font-siz
 .tot{display:flex;justify-content:space-between;font-size:20px;font-weight:700;margin-top:10px}
 .tot2{color:var(--muted);text-align:right;margin-bottom:10px}
 .payg{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:6px}
+details.smsbox{margin:8px 0 4px}details.smsbox summary{cursor:pointer;font-weight:700;color:var(--brand);padding:6px 0}details.smsbox textarea{min-height:84px;font-size:15px}.smsres{margin-top:6px;font-size:13.5px;font-weight:600}.smsres.ok{color:var(--brand)}.smsres.bad{color:var(--warn)}
 .paystat{padding:10px;border-radius:10px;text-align:center;font-weight:700;margin:4px 0 10px;background:var(--bg)}
 .paystat.ok{background:var(--brand2);color:var(--brand)}.paystat.bad{background:var(--warnbg);color:var(--warn)}
 #toast{position:fixed;left:50%;bottom:calc(var(--navh) + 80px);transform:translateX(-50%);background:#17261e;color:#fff;padding:10px 16px;border-radius:12px;z-index:40;display:none;max-width:90vw;text-align:center}
@@ -374,7 +378,9 @@ function stockMap(){
   return m;
 }
 function products(){return Object.keys(S.products).map(function(k){return S.products[k];}).filter(function(p){return !p.del;});}
-function stockOf(id){if(!STOCKV){STOCK=stockMap();STOCKV=true;}return r2(STOCK[id]||0);}
+function r3(n){return Math.round((n+Number.EPSILON)*1000)/1000;}
+function fmtq(n){return Number(r3(n)).toLocaleString('es',{maximumFractionDigits:3});}
+function stockOf(id){if(!STOCKV){STOCK=stockMap();STOCKV=true;}return r3(STOCK[id]||0);}
 
 /* ---------- sincronización con la nube (opcional) ---------- */
 function dirtyCount(){return Object.keys(S.dirty).length;}
@@ -474,7 +480,7 @@ function doRender(){
   updateSyncChip();
   if(keep){var el=document.getElementById(keep.id);if(el){el.focus();try{el.setSelectionRange(keep.pos,keep.pos);}catch(e){}}}
 }
-function openModal(html){$('#modal-root').innerHTML='<div class="scrim"><div class="sheet">'+html+'</div></div>';}
+function openModal(html){$('#modal-root').innerHTML='<div class="scrim"><div class="sheet"><button class="mclose" data-act="modal-close" aria-label="Cerrar">✕</button>'+html+'</div></div>';}
 function closeModal(){$('#modal-root').innerHTML='';}
 function emptyState(t,d,btn,tab){return '<div class="empty"><h3>'+esc(t)+'</h3><p class="muted">'+esc(d)+'</p>'+(btn?'<button class="btn primary" data-act="go" data-tab="'+tab+'">'+esc(btn)+'</button>':'')+'</div>';}
 function armed(t,label){
@@ -498,7 +504,7 @@ function viewCaja(){
   if(!list.length)return h+'<p class="muted center">Sin resultados.</p>';
   h+='<div class="grid">'+list.map(function(p){
     var st=stockOf(p.id),out=st<=0&&!S.settings.allowNegative;
-    return '<button class="prod'+(out?' out':'')+'" data-act="add" data-id="'+p.id+'"><b>'+esc(p.name)+'</b><span class="pr">'+mCUP(priceOf(p))+(p.peg?' (USD)':'')+'</span><small>'+(st<=0?'Agotado':fmt(st)+' disp.')+'</small></button>';
+    return '<button class="prod'+(out?' out':'')+'" data-act="add" data-id="'+p.id+'"><b>'+esc(p.name)+'</b><span class="pr">'+mCUP(priceOf(p))+(p.peg?' (USD)':'')+(p.unit==='kg'?' /kg':'')+'</span><small>'+(st<=0?'Agotado':fmtq(st)+(p.unit==='kg'?' kg':'')+' disp.')+'</small></button>';
   }).join('')+'</div>';
   return h;
 }
@@ -509,11 +515,65 @@ function undoCart(){
 }
 function openCart(){
   if(!ui.cart.length){toast('El carrito está vacío');return;}
+  ui.sms=null;
   openModal('<div style="display:flex;justify-content:space-between;align-items:center"><h3>Cobrar</h3><button class="chip" data-act="cart-clear">Vaciar</button></div><div id="cl"></div><div class="tot"><span>Total</span><b id="ctot"></b></div><div class="tot2" id="ctotusd"></div>'+
   '<div class="btns"><button class="btn" data-act="pay-cup">Todo en CUP</button><button class="btn" data-act="pay-usd">Todo en USD</button><button class="btn" data-act="pay-tr">Transferencia</button></div>'+
   '<div class="payg"><label>Efectivo CUP<input id="p-cup" inputmode="decimal" placeholder="0"></label><label>Dólares USD<input id="p-usd" inputmode="decimal" placeholder="0"></label><label>Transfer. CUP<input id="p-tr" inputmode="decimal" placeholder="0"></label></div>'+
+  '<details class="smsbox"><summary>Pegar SMS de la transferencia</summary><textarea id="p-sms" rows="3" placeholder="Pega aquí el SMS de confirmación"></textarea><div class="smsres" id="sms-res"></div></details>'+
   '<div class="paystat" id="paystat"></div><button class="btn primary big" id="confirm" data-act="sale-confirm">Confirmar venta</button>');
   refreshCart();
+}
+
+/* ---------- SMS de transferencia ---------- */
+var NUMRE='(\\d{1,3}(?:[.,]\\d{3})+(?:[.,]\\d{1,2})?|\\d{1,3}(?: \\d{3})+(?:[.,]\\d{1,2})?|\\d+(?:[.,]\\d{1,2})?)';
+function smsNum(x){
+  x=String(x).replace(/\s/g,'');
+  var lc=x.lastIndexOf(','),ld=x.lastIndexOf('.');
+  if(lc>-1&&ld>-1){x=lc>ld?x.replace(/\./g,'').replace(',','.'):x.replace(/,/g,'');}
+  else if(lc>-1){var a=x.split(',');x=(a.length>2||a[1].length===3)?x.replace(/,/g,''):x.replace(',','.');}
+  else if(ld>-1){var b=x.split('.');if(b.length>2||b[1].length===3)x=x.replace(/\./g,'');}
+  var n=parseFloat(x);return isFinite(n)?n:0;
+}
+function smsHash(t){var h=5381,u=t.toLowerCase().replace(/\s+/g,' ').trim();for(var i=0;i<u.length;i++)h=((h<<5)+h+u.charCodeAt(i))|0;return 'SMS-'+(h>>>0).toString(16);}
+function smsParse(text){
+  var t=String(text||'').trim(),out={text:t,amount:0,cur:'CUP',ref:'',sent:false};
+  if(!t)return out;
+  var cands=[],m,re;
+  re=new RegExp(NUMRE+'\\s*(CUP|CUC|MLC|USD|MN|pesos?)(?![A-Za-z])','gi');
+  while((m=re.exec(t)))cands.push({i:m.index,n:m[1],c:m[2]});
+  re=new RegExp('(CUP|CUC|MLC|USD|\\$)\\s*'+NUMRE,'gi');
+  while((m=re.exec(t)))cands.push({i:m.index,n:m[2],c:m[1]});
+  re=new RegExp('(?:monto|importe|valor|suma|por|recib\\w*|acredit\\w*)\\s*[:\\-]?\\s*\\$?\\s*'+NUMRE,'gi');
+  while((m=re.exec(t)))cands.push({i:m.index,n:m[1],c:'CUP',weak:1});
+  cands=cands.filter(function(c){return !/(saldo|disponible|balance|comisi|pagad)/i.test(t.slice(Math.max(0,c.i-14),c.i+2));});
+  cands.sort(function(a,b){return (a.weak||0)-(b.weak||0)||a.i-b.i;});
+  for(var k=0;k<cands.length;k++){var v=smsNum(cands[k].n);if(v>0){out.amount=r2(v);var c=String(cands[k].c).toUpperCase();out.cur=(c==='$'||c==='MN'||/^PESO/.test(c))?'CUP':c;break;}}
+  var pm=t.match(new RegExp('pagad[oa]\\s*[:\\-]?\\s*\\$?\\s*'+NUMRE+'\\s*(CUP|CUC|MLC|USD|MN)?(?![A-Za-z])','i'));
+  if(pm){var pv=smsNum(pm[1]);if(pv>0){if(out.amount){if(out.amount!==r2(pv))out.paid=r2(pv);}else{out.amount=r2(pv);var pc=(pm[2]||'CUP').toUpperCase();out.cur=pc==='MN'?'CUP':pc;}}}
+  var rm=t.match(/(?:nro\.?|n[uú]mero|n[º°o]\.?|transacci[oó]n|trans\.?|ref(?:erencia)?\.?|c[oó]digo|operaci[oó]n|id)\s*(?:de\s+(?:transacci[oó]n|operaci[oó]n)\s*)?[:#\-]?\s*((?=[A-Za-z0-9-]*\d)[A-Za-z0-9-]{6,})/i);
+  out.ref=rm?rm[1]:smsHash(t);
+  out.sent=/(env[ií]aste|has enviado|realizaste|d[eé]bito|debitad|pagaste)/i.test(t)&&!/(recib|acredit|abon|te transfiri)/i.test(t);
+  return out;
+}
+function smsDup(ref){
+  var ids=Object.keys(S.sales);
+  for(var i=0;i<ids.length;i++){var x=S.sales[ids[i]];if(x&&!x.del&&x.tref===ref)return x;}
+  return null;
+}
+function smsRead(){
+  var res=$('#sms-res');if(!res)return;
+  var r=smsParse(val('p-sms'));ui.sms=null;
+  if(!r.text){res.className='smsres';res.textContent='';return;}
+  if(!r.amount){res.className='smsres bad';res.textContent='No encontré el monto. Escríbelo en Transfer. CUP.';return;}
+  var d=smsDup(r.ref),nid=/^SMS-/.test(r.ref);
+  if(d&&!nid){res.className='smsres bad';res.textContent='Este SMS ya se registró en una venta de las '+hhmm(d.ts)+'. No se vuelve a cobrar.';return;}
+  if(r.sent){res.className='smsres bad';res.textContent='Parece una transferencia enviada, no recibida. Revísalo.';return;}
+  if(r.cur!=='CUP'){res.className='smsres bad';res.textContent='Moneda detectada: '+r.cur+' ('+fmt(r.amount)+'). Escribe el monto a mano donde corresponda.';return;}
+  r.ok=true;ui.sms=r;
+  $('#p-tr').value=fmt2(r.amount);
+  res.className='smsres ok';res.textContent='✔ '+fmt(r.amount)+' CUP detectado'+(r.paid?' (el cliente pagó '+fmt(r.paid)+' con descuento del banco)':'')+(nid?'':' · ref '+r.ref);
+  if(d&&nid){res.className='smsres bad';res.textContent='⚠ '+fmt(r.amount)+' CUP detectado, pero ya hubo un SMS igual a las '+hhmm(d.ts)+' (sin número de operación). Si es otro pago, continúa.';}
+  refreshTotals();
 }
 function refreshCart(){
   var cl=$('#cl');if(!cl)return;
@@ -548,11 +608,13 @@ function confirmSale(){
   if(!S.settings.allowNegative){
     for(var i=0;i<lines.length;i++){if(lines[i].qty>stockOf(lines[i].pid)+1e-9){toast('Sin existencias suficientes de '+lines[i].name);return;}}
   }
+  if(ui.sms&&ui.sms.ok&&tr>0&&!/^SMS-/.test(ui.sms.ref)&&smsDup(ui.sms.ref)){toast('Este SMS ya se registró en otra venta');return;}
   var ts=Date.now(),change=r2(Math.max(0,paid-total));
   var rec={id:uid(),ts:ts,day:dayKey(ts),items:lines.map(function(l){var p=S.products[l.pid];return {pid:l.pid,name:l.name,qty:l.qty,price:l.price,cost:p?p.cost||0:0};}),total:total,pay:{cup:cup,usd:usd,tr:tr},change:change,rate:S.settings.rate};
+  if(ui.sms&&ui.sms.ok&&tr>0){rec.tref=ui.sms.ref;rec.tsms=ui.sms.text.slice(0,300);}
   var back=lines.map(function(l){return {pid:l.pid,name:l.name,price:l.price,qty:l.qty};});
   put('sales',rec);
-  ui.cart=[];ui.undo=[];closeModal();
+  ui.sms=null;ui.cart=[];ui.undo=[];closeModal();
   toast('Venta registrada · Vuelto '+money(change),'Deshacer',function(){
     var cur=S.sales[rec.id];if(!cur)return;
     put('sales',Object.assign({},cur,{del:true}));
@@ -571,7 +633,7 @@ function viewInv(){
   var list=prods.filter(function(p){return !q||p.name.toLowerCase().indexOf(q)>-1||(p.cat||'').toLowerCase().indexOf(q)>-1;}).sort(function(a,b){return a.name.localeCompare(b.name,'es');});
   h+='<div class="card" style="padding:4px 14px">'+list.map(function(p){
     var st=stockOf(p.id),cls=st<=0?'out':st<=(p.min||0)?'low':'';
-    return '<button class="item" data-act="prod-edit" data-id="'+p.id+'"><div><b>'+esc(p.name)+'</b><small>'+esc(p.cat||'Sin categoría')+' · costo '+fmt(p.cost||0)+(p.cost>0?' · +'+Math.round((priceOf(p)/p.cost-1)*100)+'%':'')+'</small></div><div class="r"><b>'+mCUP(priceOf(p))+(p.peg?' (USD)':'')+'</b><br><span class="badge '+cls+'">'+(st<=0?'Agotado':fmt(st)+' u.')+'</span></div></button>';
+    return '<button class="item" data-act="prod-edit" data-id="'+p.id+'"><div><b>'+esc(p.name)+'</b><small>'+esc(p.cat||'Sin categoría')+' · costo '+fmt(p.cost||0)+(p.cost>0?' · +'+Math.round((priceOf(p)/p.cost-1)*100)+'%':'')+'</small></div><div class="r"><b>'+mCUP(priceOf(p))+(p.peg?' (USD)':'')+(p.unit==='kg'?' /kg':'')+'</b><br><span class="badge '+cls+'">'+(st<=0?'Agotado':fmtq(st)+(p.unit==='kg'?' kg':' u.'))+'</span></div></button>';
   }).join('')+'</div><div class="btns"><button class="btn" data-act="import-open">Importar lista de productos</button><button class="btn" data-act="reprice">Recalcular precios con el margen</button></div>';
   return h;
 }
@@ -581,18 +643,19 @@ function openProduct(id){
   var hist='';
   if(p){
     var ev=[];
-    Object.keys(S.entries).forEach(function(k){var e=S.entries[k];if(e.pid===p.id&&!e.del)ev.push({ts:e.ts,l:e.type==='inicial'?'Stock inicial':e.type==='entrada'?'Entrada':'Ajuste'+(e.note?' · '+e.note:''),q:e.qty});});
+    Object.keys(S.entries).forEach(function(k){var e=S.entries[k];if(e.pid===p.id&&!e.del)ev.push({id:k,ts:e.ts,l:e.type==='inicial'?'Stock inicial':e.type==='entrada'?'Entrada':'Ajuste'+(e.note?' · '+e.note:''),q:e.qty});});
     Object.keys(S.sales).forEach(function(k){var s=S.sales[k];if(s.del)return;s.items.forEach(function(it){if(it.pid===p.id)ev.push({ts:s.ts,l:'Venta',q:-it.qty});});});
     ev.sort(function(a,b){return b.ts-a.ts;});
-    if(ev.length)hist='<div class="hist"><b>Últimos movimientos</b>'+ev.slice(0,6).map(function(e){return '<div><span>'+new Date(e.ts).toLocaleDateString('es',{day:'numeric',month:'short'})+' · '+esc(e.l)+'</span><span>'+(e.q>0?'+':'')+fmt(e.q)+'</span></div>';}).join('')+'</div>';
+    if(ev.length)hist='<div class="hist"><b>Últimos movimientos</b>'+ev.slice(0,8).map(function(e){return '<div><span>'+new Date(e.ts).toLocaleDateString('es',{day:'numeric',month:'short'})+' · '+esc(e.l)+'</span><span>'+(e.q>0?'+':'')+fmtq(e.q)+(e.id?' <button class="hx" data-act="entry-del" data-id="'+e.id+'" aria-label="Eliminar movimiento">✕</button>':'')+'</span></div>';}).join('')+'</div>';
   }
   var ccur=p&&p.ccur==='USD'&&p.costUSD>0?'USD':'CUP';
   var costShown=p?(ccur==='USD'?p.costUSD:(p.cost||'')):'';
   var pr=p?priceOf(p):'';
   var pusd=p?(p.peg&&p.priceUSD>0?p.priceUSD:(pr?r2(pr/rate()):'')):'';
   openModal('<h3>'+(p?'Producto':'Nuevo producto')+'</h3>'+
-  (p?'<p class="help">En existencia: <b>'+fmt(stockOf(p.id))+'</b></p>':'')+
   '<label>Nombre<input id="f-name" value="'+esc(p?p.name:'')+'" autocomplete="off"></label>'+
+  '<label>Se vende por<select id="f-unit"><option value="u"'+(p&&p.unit==='kg'?'':' selected')+'>Unidad</option><option value="kg"'+(p&&p.unit==='kg'?' selected':'')+'>Kilogramo (a granel: sacos, bolsas de 500 g, 1 kg…)</option></select></label>'+
+  (p?'<label>En existencia (corrígela aquí si hubo un error)<input id="f-stockcur" inputmode="decimal" value="'+stockOf(p.id)+'"></label>':'')+
   '<div class="fg"><label>Costo de compra<input id="f-cost" inputmode="decimal" value="'+costShown+'"></label><label>Moneda del costo<select id="f-ccur"><option value="CUP"'+(ccur==='CUP'?' selected':'')+'>CUP</option><option value="USD"'+(ccur==='USD'?' selected':'')+'>USD</option></select></label></div>'+
   '<div class="card" id="sugbox"></div>'+
   '<label>Precio de venta (CUP)<input id="f-price" inputmode="decimal" value="'+pr+'"></label>'+
@@ -602,7 +665,7 @@ function openProduct(id){
   '<label style="display:flex;gap:10px;align-items:center;color:var(--ink)"><input type="checkbox" id="f-peg" style="width:auto;min-height:0" '+(p&&p.peg?'checked':'')+'> Atar el precio al dólar (se recalcula con la tasa)</label></details>'+
   '<datalist id="cats">'+cats.map(function(c){return '<option value="'+esc(c)+'">';}).join('')+'</datalist>'+
   '<button class="btn primary big" data-act="prod-save" data-id="'+(p?p.id:'')+'">Guardar</button>'+
-  (p?'<div class="btns"><button class="btn" data-act="entry-open" data-id="'+p.id+'">+ Entrada (compra)</button><button class="btn" data-act="adj-open" data-id="'+p.id+'">Ajuste / merma</button></div><button class="btn danger" data-act="prod-archive" data-id="'+p.id+'">Archivar producto</button>':'')+hist);
+  (p?'<div class="btns"><button class="btn" data-act="entry-open" data-id="'+p.id+'">+ Entrada (compra)</button><button class="btn" data-act="adj-open" data-id="'+p.id+'">Ajuste / merma</button></div><button class="btn danger" data-act="prod-archive" data-id="'+p.id+'">Archivar producto</button><button class="btn danger" data-act="prod-del" data-id="'+p.id+'">Eliminar (lo registré por error)</button>':'')+hist);
   updateSugg();
   if(!p)setTimeout(function(){var e=$('#f-name');if(e)e.focus();},60);
 }
@@ -623,8 +686,10 @@ function saveProduct(id){
   if(peg&&pusd<=0){toast('Indica el precio en USD para atarlo al dólar');return;}
   if(peg)price=roundUp(pusd*rate());
   var old=id?S.products[id]:null;
-  var rec=Object.assign({},old||{},{id:id||uid(),name:name,cat:val('f-cat').trim(),price:price,cost:cc,ccur:cur,costUSD:cur==='USD'?c:0,margin:(num(val('f-margin'))===S.settings.margin?null:num(val('f-margin'))),peg:peg,priceUSD:peg?pusd:0,min:num(val('f-min'))});
+  var rec=Object.assign({},old||{},{id:id||uid(),name:name,cat:val('f-cat').trim(),price:price,cost:cc,ccur:cur,costUSD:cur==='USD'?c:0,margin:(num(val('f-margin'))===S.settings.margin?null:num(val('f-margin'))),peg:peg,priceUSD:peg?pusd:0,min:num(val('f-min')),unit:val('f-unit')==='kg'?'kg':'u'});
+  var stCur=id?stockOf(id):0,stNew=(id&&val('f-stockcur')!=='')?num(val('f-stockcur')):stCur;
   put('products',rec);
+  if(id&&Math.abs(stNew-stCur)>1e-9)put('entries',{id:uid(),pid:id,qty:r3(stNew-stCur),type:'ajuste',cost:0,note:'Corrección de existencia',ts:Date.now()});
   if(!id){var st=num(val('f-stock'));if(st>0)put('entries',{id:uid(),pid:rec.id,qty:st,type:'inicial',cost:cc,note:'',ts:Date.now()});}
   closeModal();toast('Producto guardado');
 }
@@ -632,8 +697,8 @@ function openEntry(id){
   var p=S.products[id];if(!p)return;
   ui.entryId=id;
   var cur=p.ccur==='USD'&&p.costUSD>0?'USD':'CUP',c=cur==='USD'?p.costUSD:(p.cost||'');
-  openModal('<h3>Entrada · '+esc(p.name)+'</h3><div class="fg"><label>Cantidad<input id="e-qty" inputmode="decimal"></label><label>Moneda del costo<select id="e-ccur"><option value="CUP"'+(cur==='CUP'?' selected':'')+'>CUP</option><option value="USD"'+(cur==='USD'?' selected':'')+'>USD</option></select></label></div>'+
-  '<label>Costo unitario<input id="e-cost" inputmode="decimal" value="'+c+'"></label><div class="card" id="esug"></div>'+
+  openModal('<h3>Entrada · '+esc(p.name)+'</h3>'+(p.unit==='kg'?'<div class="card"><b>Compra por sacos</b><div class="fg"><label>Sacos<input id="e-sacks" inputmode="decimal"></label><label>Kg por saco<input id="e-kgs" inputmode="decimal"></label></div><label>Costo por saco<input id="e-sackcost" inputmode="decimal"></label><span class="muted" style="font-size:14px">Calcula solo los kg y el costo por kg. Si no compras por sacos, escribe los kg abajo.</span></div>':'')+'<div class="fg"><label>Cantidad'+(p.unit==='kg'?' (kg)':'')+'<input id="e-qty" inputmode="decimal"></label><label>Moneda del costo<select id="e-ccur"><option value="CUP"'+(cur==='CUP'?' selected':'')+'>CUP</option><option value="USD"'+(cur==='USD'?' selected':'')+'>USD</option></select></label></div>'+
+  '<label>Costo '+(p.unit==='kg'?'por kg':'unitario')+'<input id="e-cost" inputmode="decimal" value="'+c+'"></label><div class="card" id="esug"></div>'+
   '<label style="display:flex;gap:8px;align-items:center;color:var(--ink)"><input type="checkbox" id="e-upd" style="width:auto"> Actualizar el precio de venta al sugerido</label>'+
   '<label>Proveedor / nota<input id="e-note" autocomplete="off"></label><button class="btn primary big" data-act="entry-save" data-id="'+id+'">Registrar entrada</button>');
   var u=$('#e-upd');if(u)u.checked=!(priceOf(p)>0);
@@ -656,6 +721,38 @@ function saveEntry(id){
   if($('#e-upd').checked&&cc>0){var m=margOf(p);if(p.peg)np.priceUSD=r2(cc*(1+m/100)/rate());else np.price=sugg(cc,m);}
   if(JSON.stringify(np)!==JSON.stringify(p))put('products',np);
   closeModal();toast('Entrada registrada');
+}
+function sackCalc(){
+  var sk=num(val('e-sacks')),kg=num(val('e-kgs')),c=num(val('e-sackcost'));
+  if(sk>0&&kg>0&&$('#e-qty'))$('#e-qty').value=String(r3(sk*kg));
+  if(kg>0&&c>0&&$('#e-cost'))$('#e-cost').value=String(r2(c/kg));
+  updateEsug();
+}
+function packPrice(p,kg){var raw=priceOf(p)*kg;return roundUp(raw)||r2(raw);}
+function wtLabel(g){return g<1000?g+' g':fmtq(g/1000)+' kg';}
+function openWeight(id){
+  var p=S.products[id];if(!p)return;
+  ui.wtId=id;
+  openModal('<h3>'+esc(p.name)+'</h3><p class="help">'+mCUP(priceOf(p))+' por kg · En existencia: <b>'+fmtq(stockOf(id))+' kg</b></p><div class="wtgrid">'+
+  [250,500,1000,2000].map(function(g){return '<button class="btn" data-act="wt-add" data-id="'+id+'" data-g="'+g+'"><b>'+wtLabel(g)+'</b><small>'+mCUP(packPrice(p,g/1000))+'</small></button>';}).join('')+'</div>'+
+  '<label>Otro peso (gramos)<input id="w-g" inputmode="decimal" placeholder="750"></label><div class="help" id="w-prev"></div><button class="btn primary big" data-act="wt-custom" data-id="'+id+'">Agregar al carrito</button>');
+}
+function updateW(){var p=S.products[ui.wtId],pv=$('#w-prev');if(!p||!pv)return;var g=num(val('w-g'));pv.textContent=g>0?wtLabel(g)+' = '+mCUP(packPrice(p,g/1000)):'';}
+function addWeight(id,kg){
+  var p=S.products[id];if(!p||!(kg>0))return;
+  kg=r3(kg);
+  var inCart=sum(ui.cart.filter(function(x){return x.pid===id;}),function(x){return x.qty;});
+  if(!S.settings.allowNegative&&inCart+kg>stockOf(id)+1e-9){toast('Sin existencias suficientes de '+p.name);return;}
+  var price=r2(packPrice(p,kg)/kg);
+  pushUndo();
+  var l=ui.cart.filter(function(x){return x.pid===id&&x.unit==='kg'&&Math.abs(x.price-price)<0.0001;})[0];
+  if(l)l.qty=r3(l.qty+kg);else ui.cart.push({pid:id,name:p.name+' (kg)',price:price,qty:kg,unit:'kg'});
+  closeModal();render();
+}
+function hasSales(id){
+  var ks=Object.keys(S.sales),i,j,s;
+  for(i=0;i<ks.length;i++){s=S.sales[ks[i]];if(!s||s.del)continue;for(j=0;j<s.items.length;j++)if(s.items[j].pid===id)return true;}
+  return false;
 }
 function openAdj(id){
   var p=S.products[id];if(!p)return;
@@ -731,8 +828,8 @@ function viewCierre(){
 }
 function openTicket(id){
   var s=S.sales[id];if(!s)return;
-  openModal('<h3>Ticket · '+hhmm(s.ts)+'</h3>'+s.items.map(function(i){return row(esc(i.name)+' <span class="muted">× '+fmt(i.qty)+'</span>',fmt(i.qty*i.price));}).join('')+row('Total',money(s.total),'sum')+
-  '<div class="help" style="margin-top:8px">Pagó: '+[s.pay.cup?fmt(s.pay.cup)+' CUP efectivo':'',s.pay.usd?fmt(s.pay.usd)+' USD (tasa '+fmt(s.rate)+')':'',s.pay.tr?fmt(s.pay.tr)+' CUP transferencia':''].filter(Boolean).join(' + ')+(s.change?' · vuelto '+fmt(s.change)+' CUP':'')+'</div>'+
+  openModal('<h3>Ticket · '+hhmm(s.ts)+'</h3>'+s.items.map(function(i){return row(esc(i.name)+' <span class="muted">× '+fmtq(i.qty)+'</span>',fmt(i.qty*i.price));}).join('')+row('Total',money(s.total),'sum')+
+  '<div class="help" style="margin-top:8px">Pagó: '+[s.pay.cup?fmt(s.pay.cup)+' CUP efectivo':'',s.pay.usd?fmt(s.pay.usd)+' USD (tasa '+fmt(s.rate)+')':'',s.pay.tr?fmt(s.pay.tr)+' CUP transferencia'+(s.tref&&!/^SMS-/.test(s.tref)?' (ref '+esc(s.tref)+')':s.tref?' (por SMS)':''):''].filter(Boolean).join(' + ')+(s.change?' · vuelto '+fmt(s.change)+' CUP':'')+'</div>'+
   '<button class="btn danger big" data-act="void" data-id="'+id+'">Anular venta</button>');
 }
 function openExpense(){
@@ -757,7 +854,7 @@ function viewInvest(){
   var tInv=r2(tGa+mi.total),diff=r2(tAp-tInv),prof=profitToDate(),pend=r2(tInv-prof);
   var pct=tInv>0?Math.max(0,Math.min(100,Math.round(prof/tInv*100))):0;
   var h='<div class="card kpis"><div><small>Aportado</small><b>'+fmt(tAp)+'</b></div><div><small>Invertido</small><b>'+fmt(tInv)+'</b></div><div><small>Aportes − inversión</small><b class="'+(diff>=0?'pos':'neg')+'">'+fmt(diff)+'</b></div></div>';
-  if(diff<0)h+='<div class="card" style="background:var(--warnbg);border-color:transparent"><b>Falta cuadrar '+money(-diff)+'.</b> Lo invertido supera lo aportado. Registra los aportes que faltan (otro dinero, reinversión, préstamo…) para que el balance cuadre.</div>';
+  if(diff<0)h+='<div class="card" style="background:var(--warnbg);border-color:transparent"><b>Falta cuadrar '+money(-diff)+'.</b> Lo invertido supera lo aportado. Registra los aportes que faltan (otro dinero, préstamo…) para que el balance cuadre.</div>';
   var groups={},order=[],named=false;
   ap.forEach(function(a){var k=a.who||'Sin nombre';if(a.who)named=true;if(!groups[k]){groups[k]={m:0,u:0};order.push(k);}groups[k].m+=a.amount;groups[k].u+=a.usd||0;});
   if(named&&tAp>0)h+='<div class="card"><h4>Por inversionista</h4>'+order.map(function(k){var g=groups[k];return row('<b>'+esc(k)+'</b> <small class="muted">'+Math.round(g.m/tAp*100)+'%</small>',money(g.m)+(g.u?' · '+fmt(g.u)+' USD':''));}).join('')+'</div>';
@@ -767,6 +864,8 @@ function viewInvest(){
   h+='<div class="card" style="padding-bottom:10px"><h4>En qué se invirtió</h4>'+ga.map(function(g){
     return '<button class="item" data-act="inv-edit" data-id="'+g.id+'"><div><b>'+esc(g.desc)+'</b><small>'+shortDate(g.ts)+'</small></div><b>'+money(g.amount)+'</b></button>';
   }).join('')+(mi.n?row('Mercancía inicial <small class="muted">('+mi.n+' productos)</small>',money(mi.total)):'')+row('Total invertido',money(tInv),'sum')+'<button class="btn" data-act="inv-gasto" style="width:100%;margin-top:8px">+ Agregar gasto de inversión</button></div>';
+  var reinv=r2(sum(Object.keys(S.entries).map(function(k){return S.entries[k];}).filter(function(e){return !e.del&&e.type==='entrada';}),function(e){return e.qty*(e.cost||0);}));
+  h+='<div class="card"><h4>Reinversión</h4>'+row('Mercancía comprada después de abrir',money(reinv),'sum')+'<p class="help" style="margin:6px 0 0">Cada compra que registras con <b>+ Entrada</b> en Inventario cuenta aquí. Sale del dinero de las ventas, así que no hay que anotarla como aporte.</p></div>';
   h+='<div class="card"><h4>Recuperación de la inversión</h4>'+row('Ganancia neta acumulada','<span class="'+(prof>=0?'pos':'neg')+'">'+money(prof)+'</span>')+row('Por recuperar',money(Math.max(pend,0)),'sum')+
     '<div style="height:12px;background:var(--bg);border-radius:6px;overflow:hidden;margin:10px 0 4px"><div style="height:100%;width:'+pct+'%;background:var(--brand)"></div></div><div class="muted" style="font-size:14px">'+(tInv>0&&prof>=tInv?'Inversión recuperada 🎉':pct+'% recuperado')+'</div></div>';
   return h;
@@ -876,6 +975,7 @@ var H={
   cat:function(t){ui.cat=t.dataset.cat;render();},
   add:function(t){
     var p=S.products[t.dataset.id];if(!p)return;
+    if(p.unit==='kg'){openWeight(p.id);return;}
     var l=ui.cart.filter(function(x){return x.pid===p.id;})[0],nq=(l?l.qty:0)+1;
     if(!S.settings.allowNegative&&nq>stockOf(p.id)){toast('Sin existencias de '+p.name);return;}
     pushUndo();
@@ -887,8 +987,8 @@ var H={
   'cart-clear':function(t){if(!armed(t,'¿Vaciar? Toca otra vez'))return;pushUndo();ui.cart=[];closeModal();render();toast('Carrito vaciado','Deshacer',undoCart);},
   'toast-act':function(){var f=toast.fn;toast.fn=null;$('#toast').style.display='none';if(f)f();},
   'cart-open':openCart,
-  inc:function(t){var l=ui.cart[+t.dataset.i];if(l){l.qty=r2(l.qty+1);refreshCart();}},
-  dec:function(t){var i=+t.dataset.i,l=ui.cart[i];if(!l)return;if(l.qty-1<=0){pushUndo();ui.cart.splice(i,1);}else l.qty=r2(l.qty-1);refreshCart();render();},
+  inc:function(t){var l=ui.cart[+t.dataset.i];if(l){l.qty=r3(l.qty+(l.unit==='kg'?0.25:1));refreshCart();}},
+  dec:function(t){var i=+t.dataset.i,l=ui.cart[i];if(!l)return;var stp=l.unit==='kg'?0.25:1;if(l.qty-stp<=0){pushUndo();ui.cart.splice(i,1);}else l.qty=r3(l.qty-stp);refreshCart();render();},
   'pay-cup':function(){$('#p-cup').value=fmt2(cartTotal());$('#p-usd').value='';$('#p-tr').value='';refreshTotals();},
   'pay-usd':function(){$('#p-usd').value=fmt2(Math.ceil(cartTotal()/rate()*100)/100);$('#p-cup').value='';$('#p-tr').value='';refreshTotals();},
   'pay-tr':function(){$('#p-tr').value=fmt2(cartTotal());$('#p-cup').value='';$('#p-usd').value='';refreshTotals();},
@@ -898,6 +998,29 @@ var H={
   'prod-new':function(){openProduct(null);},
   'prod-edit':function(t){openProduct(t.dataset.id);},
   'prod-save':function(t){saveProduct(t.dataset.id||null);},
+  'modal-close':function(){closeModal();},
+  'prod-del':function(t){
+    var id=t.dataset.id,p=S.products[id];if(!p)return;
+    if(hasSales(id)){toast('Ya tiene ventas registradas. Usa Archivar para ocultarlo.');return;}
+    if(!armed(t,'¿Eliminar? Toca otra vez'))return;
+    var es=Object.keys(S.entries).filter(function(k){return S.entries[k].pid===id&&!S.entries[k].del;});
+    put('products',Object.assign({},p,{del:true}));
+    es.forEach(function(k){put('entries',Object.assign({},S.entries[k],{del:true}));});
+    closeModal();
+    toast('Producto eliminado','Deshacer',function(){
+      put('products',Object.assign({},S.products[id],{del:false}));
+      es.forEach(function(k){put('entries',Object.assign({},S.entries[k],{del:false}));});
+      render();toast('Producto restaurado');
+    });
+  },
+  'entry-del':function(t){
+    var e=S.entries[t.dataset.id];if(!e)return;
+    if(!armed(t,'¿Seguro? Toca otra vez'))return;
+    put('entries',Object.assign({},e,{del:true}));
+    openProduct(e.pid);toast('Movimiento eliminado');
+  },
+  'wt-add':function(t){addWeight(t.dataset.id,(+t.dataset.g)/1000);},
+  'wt-custom':function(t){var g=num(val('w-g'));if(!(g>0)){toast('Indica los gramos');return;}addWeight(t.dataset.id,g/1000);},
   'prod-archive':function(t){if(!armed(t,'¿Seguro? Toca de nuevo'))return;var p=S.products[t.dataset.id];if(p)put('products',Object.assign({},p,{del:true}));closeModal();toast('Producto archivado');},
   'entry-open':function(t){openEntry(t.dataset.id);},
   'entry-save':function(t){saveEntry(t.dataset.id);},
@@ -992,6 +1115,9 @@ document.addEventListener('input',function(e){
     if(t.classList.contains('lq'))l.qty=num(t.value);else l.price=num(t.value);
     refreshTotals();
   }
+  else if(t.id==='p-sms')smsRead();
+  else if(t.id==='e-sacks'||t.id==='e-kgs'||t.id==='e-sackcost')sackCalc();
+  else if(t.id==='w-g')updateW();
   else if(t.id==='p-cup'||t.id==='p-usd'||t.id==='p-tr')refreshTotals();
   else if(t.id==='v-amt'||t.id==='v-cur'||t.id==='v-rate')updateAp();
   else if(t.id==='f-cost'||t.id==='f-ccur'||t.id==='f-margin')updateSugg();
