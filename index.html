@@ -49,7 +49,9 @@ label input,label select,label textarea{margin-top:4px;color:var(--ink);font-siz
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
 .prod{text-align:left;border:1px solid var(--line);background:var(--card);border-radius:12px;padding:10px;cursor:pointer;display:flex;flex-direction:column;gap:2px;min-height:78px}
 .prod b{font-size:14.5px;line-height:1.2}.prod .pr{color:var(--brand);font-weight:700}.prod small{color:var(--muted)}
-.prod.out{opacity:.5}
+.prod.out{opacity:.5}.prod.low{border-color:#e3b779;background:var(--warnbg)}.prod.low small{color:var(--warn);font-weight:700}
+.lowbar{display:block;width:100%;text-align:left;border:1px solid #e3b779;background:var(--warnbg);color:var(--warn);border-radius:12px;padding:10px 12px;margin:0 0 10px;font-size:14px;line-height:1.35;cursor:pointer}
+nav .nd{position:absolute;top:4px;margin-left:14px;min-width:17px;height:17px;border-radius:9px;background:var(--bad);color:#fff;font-size:11px;line-height:17px;font-weight:700;padding:0 4px;text-align:center}nav button{position:relative}
 .item{width:100%;text-align:left;border:0;border-bottom:1px solid var(--line);background:none;padding:10px 2px;display:flex;justify-content:space-between;gap:10px;cursor:pointer}
 .item small{display:block;color:var(--muted)}.item .r{text-align:right}
 .row{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid var(--line)}
@@ -172,7 +174,7 @@ header{background:var(--hdr)}
 var LS_KEY='mercado.v1';
 var COLS=['products','sales','entries','expenses','invest','config'];
 var SEED=null;/*SEED*/
-var DEF={id:'main',name:'Alfonsos',rate:500,commission:0,dailyPay:0,dailyRent:0,allowNegative:false,margin:25,round:5,u:0};
+var DEF={id:'main',name:'Alfonsos',rate:500,commission:0,dailyPay:0,dailyRent:0,allowNegative:false,margin:25,round:5,lowStock:3,u:0};
 var THK='mercado.theme';
 function applyTheme(t){document.documentElement.setAttribute('data-theme',t);var b=document.getElementById('theme-btn');if(b)b.textContent=t==='dark'?'\u2600\uFE0F Claro':'\uD83C\uDF19 Oscuro';var m=document.querySelector('meta[name=theme-color]');if(m)m.setAttribute('content',t==='dark'?'#16372a':'#1E6B47');}
 function initTheme(){var t=null;try{t=localStorage.getItem(THK);}catch(e){}if(t!=='dark'&&t!=='light'){t=(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches)?'dark':'light';}applyTheme(t);}
@@ -471,7 +473,8 @@ function doRender(){
   if(sbOn()&&sess&&sess.role==='admin'&&ui.tab==='ajustes'&&sbUsers===null)sbLoadUsers();
   
   $('#rate-chip').textContent='1 USD = '+fmt(S.settings.rate)+' CUP';
-  Array.prototype.forEach.call(document.querySelectorAll('nav button'),function(b){b.classList.toggle('on',b.dataset.tab===ui.tab);});
+  var nLow=lowList().length;
+  Array.prototype.forEach.call(document.querySelectorAll('nav button'),function(b){b.classList.toggle('on',b.dataset.tab===ui.tab);if(b.dataset.tab==='inv'){var d=b.querySelector('.nd');if(nLow){if(!d){d=document.createElement('span');d.className='nd';b.appendChild(d);}d.textContent=nLow;}else if(d)b.removeChild(d);}});
   var v=$('#view');
   v.innerHTML=ui.tab==='caja'?viewCaja():ui.tab==='inv'?viewInv():ui.tab==='cierre'?viewCierre():ui.tab==='invest'?viewInvest():viewAjustes();
   var cb=$('#cartbar'),n=ui.cart.length;
@@ -493,18 +496,21 @@ function armed(t,label){
 /* ---------- CAJA ---------- */
 function cartTotal(){return r2(sum(ui.cart,function(l){return l.qty*l.price;}));}
 function viewCaja(){
-  var prods=products();
-  if(!prods.length)return emptyState('Aún no hay productos','Agrega tus productos en Inventario para empezar a vender.','Ir a Inventario','inv');
+  var all=products(),prods=all.filter(function(p){return !isOut(p);});
+  if(!all.length)return emptyState('Aún no hay productos','Agrega tus productos en Inventario para empezar a vender.','Ir a Inventario','inv');
+  if(!prods.length)return emptyState('Todo está agotado','Repón desde Inventario → Agotados para volver a vender.','Ir a Inventario','inv');
   var cats=[],seenC={};prods.forEach(function(p){if(p.cat&&!seenC[p.cat]){seenC[p.cat]=1;cats.push(p.cat);}});cats.sort();
   var q=ui.q.trim().toLowerCase();
   var list=prods.filter(function(p){return (!ui.cat||p.cat===ui.cat)&&(!q||p.name.toLowerCase().indexOf(q)>-1||(p.cat||'').toLowerCase().indexOf(q)>-1);})
     .sort(function(a,b){return a.name.localeCompare(b.name,'es');});
   var h='<input id="q" placeholder="Buscar producto…" value="'+esc(ui.q)+'" autocomplete="off" style="margin-bottom:8px">';
   if(cats.length){h+='<div class="chips"><button class="chip'+(!ui.cat?' on':'')+'" data-act="cat" data-cat="">Todos</button>'+cats.map(function(c){return '<button class="chip'+(ui.cat===c?' on':'')+'" data-act="cat" data-cat="'+esc(c)+'">'+esc(c)+'</button>';}).join('')+'</div>';}
+  var lw=lowList();
+  if(lw.length&&!q&&!ui.cat)h+='<button class="lowbar" data-act="go" data-tab="inv">⚠ <b>Poco stock:</b> '+lw.slice(0,4).map(function(p){return esc(lowTxt(p));}).join(', ')+(lw.length>4?' y '+(lw.length-4)+' más':'')+'</button>';
   if(!list.length)return h+'<p class="muted center">Sin resultados.</p>';
   h+='<div class="grid">'+list.map(function(p){
     var st=stockOf(p.id),out=st<=0&&!S.settings.allowNegative;
-    return '<button class="prod'+(out?' out':'')+'" data-act="add" data-id="'+p.id+'"><b>'+esc(p.name)+'</b><span class="pr">'+mCUP(priceOf(p))+(p.peg?' (USD)':'')+(p.unit==='kg'?' /kg':'')+'</span><small>'+(st<=0?'Agotado':fmtq(st)+(p.unit==='kg'?' kg':'')+' disp.')+'</small></button>';
+    return '<button class="prod'+(out?' out':isLow(p)?' low':'')+'" data-act="add" data-id="'+p.id+'"><b>'+esc(p.name)+'</b><span class="pr">'+mCUP(priceOf(p))+(p.peg?' (USD)':'')+(p.unit==='kg'?' /kg':'')+'</span><small>'+(st<=0?'Agotado':isLow(p)?'⚠ Quedan '+fmtq(st)+(p.unit==='kg'?' kg':''):fmtq(st)+(p.unit==='kg'?' kg':'')+' disp.')+'</small></button>';
   }).join('')+'</div>';
   return h;
 }
@@ -615,7 +621,8 @@ function confirmSale(){
   var back=lines.map(function(l){return {pid:l.pid,name:l.name,price:l.price,qty:l.qty};});
   put('sales',rec);
   ui.sms=null;ui.cart=[];ui.undo=[];closeModal();
-  toast('Venta registrada · Vuelto '+money(change),'Deshacer',function(){
+  var warn=[];lines.forEach(function(l){var p=S.products[l.pid];if(p&&!p.del){var st=stockOf(p.id);if(st<=0)warn.push(p.name+' (agotado)');else if(st<=minOf(p))warn.push(lowTxt(p));}});
+  toast('Venta registrada · Vuelto '+money(change)+(warn.length?' · ⚠ Poco stock: '+warn.slice(0,3).join(', ')+(warn.length>3?'…':''):''),'Deshacer',function(){
     var cur=S.sales[rec.id];if(!cur)return;
     put('sales',Object.assign({},cur,{del:true}));
     ui.cart=back;ui.tab='caja';render();toast('Venta anulada. Carrito restaurado.');
@@ -623,19 +630,48 @@ function confirmSale(){
 }
 
 /* ---------- INVENTARIO ---------- */
+function hasHistory(p){return hasSales(p.id)||Object.keys(S.entries).some(function(k){return S.entries[k].pid===p.id&&!S.entries[k].del;});}
+function isOut(p){return !p.del&&stockOf(p.id)<=0&&hasHistory(p);}
+function lowLimit(){var n=S.settings.lowStock;return (n==null||isNaN(n))?3:n;}
+function minOf(p){return p.min>0?p.min:lowLimit();}
+function isLow(p){var st=stockOf(p.id);return !p.del&&!isOut(p)&&st>0&&st<=minOf(p);}
+function lowList(){return products().filter(isLow).sort(function(a,b){return stockOf(a.id)-stockOf(b.id)||a.name.localeCompare(b.name,'es');});}
+function lowTxt(p){var st=stockOf(p.id);return p.name+' ('+(st===1&&p.unit!=='kg'?'1 u.':fmtq(st)+(p.unit==='kg'?' kg':' u.'))+')';}
 function viewInv(){
-  var prods=products(),q=ui.invQ.trim().toLowerCase();
-  var low=prods.filter(function(p){return stockOf(p.id)<=(p.min||0);}).length;
+  var all=products(),q=ui.invQ.trim().toLowerCase();
+  var out=all.filter(isOut),prods=all.filter(function(p){return !isOut(p);});
+  var low=prods.filter(function(p){return stockOf(p.id)<=minOf(p);}).length;
   var val$=sum(prods,function(p){return Math.max(stockOf(p.id),0)*(p.cost||0);});
   var h='<div class="bar"><input id="invq" placeholder="Buscar…" value="'+esc(ui.invQ)+'" autocomplete="off"><button class="btn primary" data-act="prod-new">+ Producto</button></div>';
-  if(!prods.length)return h+emptyState('Inventario vacío','Agrega productos uno a uno o pega tu lista completa.')+'<div class="btns"><button class="btn" data-act="import-open">Importar lista de productos</button></div>';
+  if(!all.length)return h+emptyState('Inventario vacío','Agrega productos uno a uno o pega tu lista completa.')+'<div class="btns"><button class="btn" data-act="import-open">Importar lista de productos</button></div>'+agotadosHtml(out);
   h+='<div class="card kpis"><div><small>Productos</small><b>'+prods.length+'</b></div><div><small>Valor a costo</small><b>'+fmt(val$)+'</b></div><div><small>Por reponer</small><b class="'+(low?'neg':'')+'">'+low+'</b></div></div>';
   var list=prods.filter(function(p){return !q||p.name.toLowerCase().indexOf(q)>-1||(p.cat||'').toLowerCase().indexOf(q)>-1;}).sort(function(a,b){return a.name.localeCompare(b.name,'es');});
-  h+='<div class="card" style="padding:4px 14px">'+list.map(function(p){
-    var st=stockOf(p.id),cls=st<=0?'out':st<=(p.min||0)?'low':'';
-    return '<button class="item" data-act="prod-edit" data-id="'+p.id+'"><div><b>'+esc(p.name)+'</b><small>'+esc(p.cat||'Sin categoría')+' · costo '+fmt(p.cost||0)+(p.cost>0?' · +'+Math.round((priceOf(p)/p.cost-1)*100)+'%':'')+'</small></div><div class="r"><b>'+mCUP(priceOf(p))+(p.peg?' (USD)':'')+(p.unit==='kg'?' /kg':'')+'</b><br><span class="badge '+cls+'">'+(st<=0?'Agotado':fmtq(st)+(p.unit==='kg'?' kg':' u.'))+'</span></div></button>';
-  }).join('')+'</div><div class="btns"><button class="btn" data-act="import-open">Importar lista de productos</button><button class="btn" data-act="reprice">Recalcular precios con el margen</button></div>';
-  return h;
+  h+=(list.length?'<div class="card" style="padding:4px 14px">'+list.map(function(p){
+    var st=stockOf(p.id),cls=st<=0?'out':st<=minOf(p)?'low':'';
+    return '<button class="item" data-act="prod-edit" data-id="'+p.id+'"><div><b>'+esc(p.name)+'</b><small>'+esc(p.cat||'Sin categoría')+' · costo '+fmt(p.cost||0)+(p.cost>0?' · +'+Math.round((priceOf(p)/p.cost-1)*100)+'%':'')+'</small></div><div class="r"><b>'+mCUP(priceOf(p))+(p.peg?' (USD)':'')+(p.unit==='kg'?' /kg':'')+'</b><br><span class="badge '+cls+'">'+(st<=0?'Sin existencias':(cls==='low'?'⚠ Quedan ':'')+fmtq(st)+(p.unit==='kg'?' kg':' u.'))+'</span></div></button>';
+  }).join('')+'</div>':'<p class="muted center">'+(prods.length?'Sin resultados.':'Todo está agotado. Repón desde la sección Agotados.')+'</p>')+'<div class="btns"><button class="btn" data-act="import-open">Importar lista de productos</button><button class="btn" data-act="reprice">Recalcular precios con el margen</button></div>';
+  return h+agotadosHtml(out);
+}
+function archivedList(){
+  return Object.keys(S.products).map(function(k){return S.products[k];}).filter(function(p){
+    return p.del&&(hasSales(p.id)||Object.keys(S.entries).some(function(k){return S.entries[k].pid===p.id&&!S.entries[k].del;}));
+  });
+}
+function lastBuy(id){var t=0;Object.keys(S.entries).forEach(function(k){var e=S.entries[k];if(e.pid===id&&!e.del&&(e.type==='entrada'||e.type==='inicial')&&e.ts>t)t=e.ts;});return t;}
+function agotadosHtml(out){
+  var hid=archivedList(),n=out.length+hid.length;if(!n)return '';
+  var line=function(inner,btns){return '<div style="display:flex;gap:8px;align-items:center;justify-content:space-between;padding:8px 0;border-top:1px solid var(--line)"><div>'+inner+'</div><div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">'+btns+'</div></div>';};
+  return '<details class="card" style="margin-top:12px"><summary style="cursor:pointer"><b>Agotados ('+n+')</b></summary><p class="help" style="margin:8px 0">Los productos que se agotan pasan aquí solos. Cuando registres una entrada (compra) vuelven al inventario, y la entrada queda con su fecha para distinguir cada compra.</p>'+
+  out.sort(function(a,b){return a.name.localeCompare(b.name,'es');}).map(function(p){
+    var lb=lastBuy(p.id);
+    return line('<b>'+esc(p.name)+'</b><br><small class="muted">Última compra: '+(lb?new Date(lb).toLocaleDateString('es',{day:'numeric',month:'short'}):'—')+'</small>',
+      '<button class="chip" data-act="entry-open" data-id="'+p.id+'">Reponer</button><button class="chip" data-act="prod-edit" data-id="'+p.id+'">Editar</button>');
+  }).join('')+
+  hid.map(function(p){
+    var cost=r2(sum(Object.keys(S.entries).map(function(k){return S.entries[k];}).filter(function(e){return e.pid===p.id&&!e.del;}),function(e){return e.qty*(e.cost||0);}));
+    return line('<b>'+esc(p.name)+'</b> <small class="muted">(oculto)</small><br><small class="muted">'+fmtq(stockOf(p.id))+(p.unit==='kg'?' kg':' u.')+' · compras '+money(cost)+'</small>',
+      '<button class="chip" data-act="prod-restore" data-id="'+p.id+'">Restaurar</button><button class="chip" data-act="prod-del" data-id="'+p.id+'">Eliminar</button>');
+  }).join('')+'</details>';
 }
 function openProduct(id){
   var p=id?S.products[id]:null;
@@ -643,10 +679,10 @@ function openProduct(id){
   var hist='';
   if(p){
     var ev=[];
-    Object.keys(S.entries).forEach(function(k){var e=S.entries[k];if(e.pid===p.id&&!e.del)ev.push({id:k,ts:e.ts,l:e.type==='inicial'?'Stock inicial':e.type==='entrada'?'Entrada':'Ajuste'+(e.note?' · '+e.note:''),q:e.qty});});
+    Object.keys(S.entries).forEach(function(k){var e=S.entries[k];if(e.pid===p.id&&!e.del)ev.push({id:k,ts:e.ts,l:e.type==='inicial'?'Stock inicial':e.type==='entrada'?'Entrada'+(e.cost>0?' · '+mCUP(e.cost)+' c/u':'')+(e.note?' · '+e.note:''):'Ajuste'+(e.note?' · '+e.note:''),q:e.qty});});
     Object.keys(S.sales).forEach(function(k){var s=S.sales[k];if(s.del)return;s.items.forEach(function(it){if(it.pid===p.id)ev.push({ts:s.ts,l:'Venta',q:-it.qty});});});
     ev.sort(function(a,b){return b.ts-a.ts;});
-    if(ev.length)hist='<div class="hist"><b>Últimos movimientos</b>'+ev.slice(0,8).map(function(e){return '<div><span>'+new Date(e.ts).toLocaleDateString('es',{day:'numeric',month:'short'})+' · '+esc(e.l)+'</span><span>'+(e.q>0?'+':'')+fmtq(e.q)+(e.id?' <button class="hx" data-act="entry-del" data-id="'+e.id+'" aria-label="Eliminar movimiento">✕</button>':'')+'</span></div>';}).join('')+'</div>';
+    if(ev.length)hist='<div class="hist"><b>Últimos movimientos</b>'+ev.slice(0,10).map(function(e){return '<div><span>'+new Date(e.ts).toLocaleDateString('es',{day:'numeric',month:'short'})+' '+hhmm(e.ts)+' · '+esc(e.l)+'</span><span>'+(e.q>0?'+':'')+fmtq(e.q)+(e.id?' <button class="hx" data-act="entry-del" data-id="'+e.id+'" aria-label="Eliminar movimiento">✕</button>':'')+'</span></div>';}).join('')+'</div>';
   }
   var ccur=p&&p.ccur==='USD'&&p.costUSD>0?'USD':'CUP';
   var costShown=p?(ccur==='USD'?p.costUSD:(p.cost||'')):'';
@@ -660,12 +696,12 @@ function openProduct(id){
   '<div class="card" id="sugbox"></div>'+
   '<label>Precio de venta (CUP)<input id="f-price" inputmode="decimal" value="'+pr+'"></label>'+
   (p?'':'<label>Stock inicial<input id="f-stock" inputmode="decimal" placeholder="0"></label>')+
-  '<details'+(p&&p.peg?' open':'')+'><summary>Más opciones</summary><div class="fg"><label>Categoría<input id="f-cat" list="cats" value="'+esc(p?p.cat||'':'')+'" autocomplete="off"></label><label>Stock mínimo<input id="f-min" inputmode="decimal" value="'+(p?p.min||0:'')+'" placeholder="0"></label>'+
+  '<details'+(p&&p.peg?' open':'')+'><summary>Más opciones</summary><div class="fg"><label>Categoría<input id="f-cat" list="cats" value="'+esc(p?p.cat||'':'')+'" autocomplete="off"></label><label>Avisar al quedar (vacío = general)<input id="f-min" inputmode="decimal" value="'+(p&&p.min>0?p.min:'')+'" placeholder="'+lowLimit()+'"></label>'+
   '<label>Margen deseado (%)<input id="f-margin" inputmode="decimal" value="'+(p?margOf(p):S.settings.margin)+'"></label><label>Precio de venta (USD)<input id="f-pusd" inputmode="decimal" value="'+pusd+'"></label></div>'+
   '<label style="display:flex;gap:10px;align-items:center;color:var(--ink)"><input type="checkbox" id="f-peg" style="width:auto;min-height:0" '+(p&&p.peg?'checked':'')+'> Atar el precio al dólar (se recalcula con la tasa)</label></details>'+
   '<datalist id="cats">'+cats.map(function(c){return '<option value="'+esc(c)+'">';}).join('')+'</datalist>'+
   '<button class="btn primary big" data-act="prod-save" data-id="'+(p?p.id:'')+'">Guardar</button>'+
-  (p?'<div class="btns"><button class="btn" data-act="entry-open" data-id="'+p.id+'">+ Entrada (compra)</button><button class="btn" data-act="adj-open" data-id="'+p.id+'">Ajuste / merma</button></div><button class="btn danger" data-act="prod-archive" data-id="'+p.id+'">Archivar producto</button><button class="btn danger" data-act="prod-del" data-id="'+p.id+'">Eliminar (lo registré por error)</button>':'')+hist);
+  (p?'<div class="btns"><button class="btn" data-act="entry-open" data-id="'+p.id+'">+ Entrada (compra)</button><button class="btn" data-act="adj-open" data-id="'+p.id+'">Ajuste / merma</button></div><button class="btn danger" data-act="prod-del" data-id="'+p.id+'">Eliminar (lo registré por error)</button>':'')+hist);
   updateSugg();
   if(!p)setTimeout(function(){var e=$('#f-name');if(e)e.focus();},60);
 }
@@ -720,7 +756,7 @@ function saveEntry(id){
   if(cc>0){np.cost=cc;np.ccur=cur;np.costUSD=cur==='USD'?c:0;}
   if($('#e-upd').checked&&cc>0){var m=margOf(p);if(p.peg)np.priceUSD=r2(cc*(1+m/100)/rate());else np.price=sugg(cc,m);}
   if(JSON.stringify(np)!==JSON.stringify(p))put('products',np);
-  closeModal();toast('Entrada registrada');
+  closeModal();toast('Entrada registrada con fecha de hoy');
 }
 function sackCalc(){
   var sk=num(val('e-sacks')),kg=num(val('e-kgs')),c=num(val('e-sackcost'));
@@ -813,7 +849,7 @@ function viewCierre(){
   var label=new Date(day+'T12:00:00').toLocaleDateString('es',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
   var agg={};sales.forEach(function(s){s.items.forEach(function(i){var a=agg[i.name]||(agg[i.name]={q:0,m:0});a.q+=i.qty;a.m+=i.qty*i.price;});});
   var top=Object.keys(agg).map(function(k){return {n:k,q:agg[k].q,m:agg[k].m};}).sort(function(a,b){return b.m-a.m;}).slice(0,5);
-  var low=products().filter(function(p){return stockOf(p.id)<=(p.min||0);}).sort(function(a,b){return stockOf(a.id)-stockOf(b.id);});
+  var low=products().filter(function(p){return stockOf(p.id)<=minOf(p);}).sort(function(a,b){return stockOf(a.id)-stockOf(b.id);});
   var h='<div class="daynav"><button class="btn" data-act="day-prev">‹</button><input type="date" id="dayin" value="'+day+'"><button class="btn" data-act="day-next">›</button><button class="btn" data-act="day-today">Hoy</button></div><div class="muted center cap">'+esc(label)+'</div>';
   h+='<div class="card kpis"><div><small>Ventas</small><b>'+fmt(total)+'</b></div><div><small>Tickets</small><b>'+sales.length+'</b></div><div><small>Ganancia neta</small><b class="'+(net>=0?'pos':'neg')+'">'+fmt(net)+'</b></div></div>';
   h+='<div class="card"><h4>Cuadre de caja</h4>'+row('Efectivo CUP (neto de vueltos)',fmt(cupNet))+row('Dólares recibidos',fmt(usd)+' USD')+row('Transferencias',fmt(tr)+' CUP')+'</div>';
@@ -840,7 +876,7 @@ function openExpense(){
 /* ---------- INVERSIÓN ---------- */
 function investList(kind){return Object.keys(S.invest).map(function(k){return S.invest[k];}).filter(function(r){return !r.del&&r.kind===kind;}).sort(function(a,b){return a.ts-b.ts;});}
 function openTs(){var t=Infinity,k,x;for(k in S.sales){x=S.sales[k];if(!x.del&&x.ts<t)t=x.ts;}return t;}
-function mercInicial(){var t=0,n={},k,e,o=openTs();for(k in S.entries){e=S.entries[k];if(e.del)continue;if(e.type==='inicial'||(e.type==='entrada'&&e.ts<o)){t+=e.qty*(e.cost||0);n[e.pid]=1;}}return {total:r2(t),n:Object.keys(n).length};}
+function mercInicial(){var t=0,ar=0,n={},k,e,o=openTs(),c;for(k in S.entries){e=S.entries[k];if(e.del)continue;if(e.type==='inicial'||(e.type==='entrada'&&e.ts<o)){c=e.qty*(e.cost||0);t+=c;n[e.pid]=1;if(S.products[e.pid]&&S.products[e.pid].del)ar+=c;}}return {total:r2(t),n:Object.keys(n).length,arch:r2(ar)};}
 function profitToDate(){
   var days={},k;
   for(k in S.sales){if(!S.sales[k].del)days[S.sales[k].day]=1;}
@@ -864,7 +900,7 @@ function viewInvest(){
   }).join('')+row('Total aportado',money(tAp)+(tUsd?' · '+fmt(tUsd)+' USD':''),'sum'):'<p class="muted" style="margin:0 0 6px">Aún no hay aportes.</p>')+'<button class="btn" data-act="inv-aporte" style="width:100%;margin-top:8px">+ Agregar aporte</button>'+(whoNames().length>1?'<button class="btn" data-act="repay-open" style="width:100%;margin-top:8px">Un inversionista devuelve el préstamo de otro</button>':'')+'</div>';
   h+='<div class="card" style="padding-bottom:10px"><h4>En qué se invirtió</h4>'+ga.map(function(g){
     return '<button class="item" data-act="inv-edit" data-id="'+g.id+'"><div><b>'+esc(g.desc)+'</b><small>'+shortDate(g.ts)+'</small></div><b>'+money(g.amount)+'</b></button>';
-  }).join('')+(mi.n?row('Mercancía inicial <small class="muted">('+mi.n+' productos)</small>',money(mi.total)):'')+row('Total invertido',money(tInv),'sum')+'<button class="btn" data-act="inv-gasto" style="width:100%;margin-top:8px">+ Agregar gasto de inversión</button></div>';
+  }).join('')+(mi.n?row('Mercancía inicial <small class="muted">('+mi.n+' productos)</small>',money(mi.total))+(mi.arch>0?'<p class="help" style="margin:4px 0 8px">Incluye '+money(mi.arch)+' de productos agotados. Revísalos en Inventario → Agotados.</p>':''):'')+row('Total invertido',money(tInv),'sum')+'<button class="btn" data-act="inv-gasto" style="width:100%;margin-top:8px">+ Agregar gasto de inversión</button></div>';
   var opened=openTs(),reinv=opened===Infinity?0:r2(sum(Object.keys(S.entries).map(function(k){return S.entries[k];}).filter(function(e){return !e.del&&e.type==='entrada'&&e.ts>=opened;}),function(e){return e.qty*(e.cost||0);}));
   h+='<div class="card"><h4>Reinversión</h4>'+(opened===Infinity?'<p class="help" style="margin:0">El mercado aún no ha abierto: lo que compres ahora cuenta como <b>mercancía inicial</b>. Cuando haya ventas, las compras nuevas que registres con <b>+ Entrada</b> aparecerán aquí como reinversión.</p>':row('Mercancía comprada después de abrir',money(reinv),'sum')+'<p class="help" style="margin:6px 0 0">Sale del dinero de las ventas, así que no hay que anotarla como aporte.</p>')+'</div>';
   h+='<div class="card"><h4>Recuperación de la inversión</h4>'+row('Ganancia neta acumulada','<span class="'+(prof>=0?'pos':'neg')+'">'+money(prof)+'</span>')+row('Por recuperar',money(Math.max(pend,0)),'sum')+
@@ -950,7 +986,7 @@ function viewAjustes(){
   '<div class="card"><h4>Negocio</h4><label>Nombre<input id="s-name" value="'+esc(s.name)+'"></label>'+
   '<div class="fg"><label>Tasa (1 USD = … CUP)<input id="s-rate" inputmode="decimal" value="'+s.rate+'"></label><label>Comisión dependienta (%)<input id="s-comm" inputmode="decimal" value="'+(s.commission||0)+'"></label>'+
   '<label>Salario diario (CUP)<input id="s-pay" inputmode="decimal" value="'+(s.dailyPay||0)+'"></label><label>Renta diaria (CUP)<input id="s-rent" inputmode="decimal" value="'+(s.dailyRent||0)+'"></label>'+
-  '<label>Margen sugerido (%)<input id="s-margin" inputmode="decimal" value="'+s.margin+'"></label><label>Redondear precios a (CUP)<input id="s-round" inputmode="decimal" value="'+s.round+'"></label></div>'+
+  '<label>Avisar poco stock al quedar (0 = no avisar)<input id="s-low" inputmode="decimal" value="'+lowLimit()+'"></label><label>Margen sugerido (%)<input id="s-margin" inputmode="decimal" value="'+s.margin+'"></label><label>Redondear precios a (CUP)<input id="s-round" inputmode="decimal" value="'+s.round+'"></label></div>'+
   '<label style="display:flex;gap:8px;align-items:center;color:var(--ink)"><input type="checkbox" id="s-neg" style="width:auto" '+(s.allowNegative?'checked':'')+'> Permitir vender sin existencias</label>'+
   '<button class="btn primary big" data-act="settings-save">Guardar ajustes</button></div>'+
   '<div class="card"><h4>Sincronización</h4><p class="help">'+cloud+'</p>'+(DB?'<button class="btn" data-act="sync-now">Sincronizar ahora</button>':'')+'</div>'+
@@ -1033,18 +1069,19 @@ var H={
   'prod-edit':function(t){openProduct(t.dataset.id);},
   'prod-save':function(t){saveProduct(t.dataset.id||null);},
   'modal-close':function(){closeModal();},
+  'prod-restore':function(t){var p=S.products[t.dataset.id];if(!p)return;put('products',Object.assign({},p,{del:false}));render();toast('Producto restaurado');},
   'repay-open':function(){openRepay();},
   'repay-save':saveRepay,
   'prod-del':function(t){
-    var id=t.dataset.id,p=S.products[id];if(!p)return;
-    if(hasSales(id)){toast('Ya tiene ventas registradas. Usa Archivar para ocultarlo.');return;}
+    var id=t.dataset.id,p=S.products[id];if(!p)return;var wasDel=!!p.del;
+    if(hasSales(id)){toast('Ya tiene ventas registradas. Si ya no tiene existencias, pasa solo a Agotados. Si le queda stock, ajústalo a 0.');return;}
     if(!armed(t,'¿Eliminar? Toca otra vez'))return;
     var es=Object.keys(S.entries).filter(function(k){return S.entries[k].pid===id&&!S.entries[k].del;});
     put('products',Object.assign({},p,{del:true}));
     es.forEach(function(k){put('entries',Object.assign({},S.entries[k],{del:true}));});
     closeModal();
     toast('Producto eliminado','Deshacer',function(){
-      put('products',Object.assign({},S.products[id],{del:false}));
+      put('products',Object.assign({},S.products[id],{del:wasDel}));
       es.forEach(function(k){put('entries',Object.assign({},S.entries[k],{del:false}));});
       render();toast('Producto restaurado');
     });
@@ -1057,7 +1094,7 @@ var H={
   },
   'wt-add':function(t){addWeight(t.dataset.id,(+t.dataset.g)/1000);},
   'wt-custom':function(t){var g=num(val('w-g'));if(!(g>0)){toast('Indica los gramos');return;}addWeight(t.dataset.id,g/1000);},
-  'prod-archive':function(t){if(!armed(t,'¿Seguro? Toca de nuevo'))return;var p=S.products[t.dataset.id];if(p)put('products',Object.assign({},p,{del:true}));closeModal();toast('Producto archivado');},
+  'prod-archive':function(t){if(!armed(t,'¿Seguro? Toca de nuevo'))return;var p=S.products[t.dataset.id];if(p)put('products',Object.assign({},p,{del:true}));closeModal();toast('Producto marcado como agotado. Búscalo en Inventario → Agotados');},
   'entry-open':function(t){openEntry(t.dataset.id);},
   'entry-save':function(t){saveEntry(t.dataset.id);},
   'adj-open':function(t){openAdj(t.dataset.id);},
@@ -1083,7 +1120,7 @@ var H={
   'void':function(t){if(!armed(t,'¿Seguro? Toca de nuevo'))return;var s=S.sales[t.dataset.id];if(s)put('sales',Object.assign({},s,{del:true}));closeModal();toast('Venta anulada');},
   'settings-save':function(){
     var r=num(val('s-rate'));if(r<=0){toast('La tasa debe ser mayor que 0');return;}
-    var old=S.settings,ch={name:val('s-name').trim()||'Alfonsos',rate:r,commission:num(val('s-comm')),dailyPay:num(val('s-pay')),dailyRent:num(val('s-rent')),margin:num(val('s-margin')),round:num(val('s-round')),allowNegative:!!$('#s-neg').checked};
+    var old=S.settings,ch={name:val('s-name').trim()||'Alfonsos',rate:r,commission:num(val('s-comm')),dailyPay:num(val('s-pay')),dailyRent:num(val('s-rent')),margin:num(val('s-margin')),round:num(val('s-round')),lowStock:Math.max(0,num(val('s-low'))),allowNegative:!!$('#s-neg').checked};
     saveSettings(ch);
     var cnt=products().filter(function(p){return !p.peg&&p.cost>0;}).length;
     if((ch.margin!==old.margin||ch.round!==old.round)&&cnt){
