@@ -120,7 +120,7 @@ var info={name:'Tienda',open:false,wa:'',note:'',hold:24},items=[],cart={},cust=
 function $(s){return document.querySelector(s);}
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
 function ls(k,v){try{if(v===undefined){var r=localStorage.getItem(k);return r?JSON.parse(r):null;}localStorage.setItem(k,JSON.stringify(v));}catch(e){return null;}}
-function money(n){n=Math.round(n*100)/100;var s=(Math.abs(n)%1?n.toFixed(2):String(Math.round(n)));var p=s.split('.');p[0]=p[0].replace(/\B(?=(\d{3})+(?!\d))/g,'.');return '$'+p.join(',');}
+function money(n){n=Math.round(n*100)/100;return '$'+n.toLocaleString('es',{maximumFractionDigits:2});}
 function qtyTxt(it,q){return it.unit==='kg'?(Math.round(q*100)/100).toString().replace('.',',')+' kg':String(q);}
 function step(it){return it.unit==='kg'?0.25:1;}
 function lineTotal(it,q){var t=it.price*q;if(it.unit!=='kg')return Math.round(t*100)/100;var r=+info.round||0;if(r<=0)return Math.round(t*100)/100;if(t<50&&r>1)r=1;return Math.ceil(t/r-1e-9)*r;}
