@@ -901,7 +901,7 @@ function viewInvest(){
     return '<button class="item" data-act="inv-edit" data-id="'+a.id+'"><div><b>'+esc(a.who||a.desc)+'</b><small>'+(a.who?esc(a.desc)+' · ':'')+shortDate(a.ts)+(a.usd?' · '+fmt(a.usd)+' USD × '+fmt(a.rate):'')+(a.from?' · préstamo de '+esc(a.from)+' devuelto':'')+'</small></div><b>'+money(a.amount)+'</b></button>';
   }).join('')+row('Total aportado',money(tAp)+(tUsd?' · '+fmt(tUsd)+' USD':''),'sum'):'<p class="muted" style="margin:0 0 6px">Aún no hay aportes.</p>')+'<button class="btn" data-act="inv-aporte" style="width:100%;margin-top:8px">+ Agregar aporte</button>'+(whoNames().length>1?'<button class="btn" data-act="repay-open" style="width:100%;margin-top:8px">Un inversionista devuelve el préstamo de otro</button>':'')+'</div>';
   h+='<div class="card" style="padding-bottom:10px"><h4>En qué se invirtió</h4>'+ga.map(function(g){
-    return '<button class="item" data-act="inv-edit" data-id="'+g.id+'"><div><b>'+esc(g.desc)+'</b><small>'+shortDate(g.ts)+'</small></div><b>'+money(g.amount)+'</b></button>';
+    return '<button class="item" data-act="inv-edit" data-id="'+g.id+'"><div><b>'+esc(g.desc)+'</b><small>'+shortDate(g.ts)+(g.usd?' · '+fmt(g.usd)+' USD × '+fmt(g.rate):'')+'</small></div><b>'+money(g.amount)+'</b></button>';
   }).join('')+(mi.n?row('Mercancía inicial <small class="muted">('+mi.n+' productos)</small>',money(mi.total))+(mi.arch>0?'<p class="help" style="margin:4px 0 8px">Incluye '+money(mi.arch)+' de productos agotados. Revísalos en Inventario → Agotados.</p>':''):'')+row('Total invertido',money(tInv),'sum')+'<button class="btn" data-act="inv-gasto" style="width:100%;margin-top:8px">+ Agregar gasto de inversión</button></div>';
   var opened=openTs(),reinv=opened===Infinity?0:r2(sum(Object.keys(S.entries).map(function(k){return S.entries[k];}).filter(function(e){return !e.del&&e.type==='entrada'&&e.ts>=opened;}),function(e){return e.qty*(e.cost||0);}));
   h+='<div class="card"><h4>Reinversión</h4>'+(opened===Infinity?'<p class="help" style="margin:0">El mercado aún no ha abierto: lo que compres ahora cuenta como <b>mercancía inicial</b>. Cuando haya ventas, las compras nuevas que registres con <b>+ Entrada</b> aparecerán aquí como reinversión.</p>':row('Mercancía comprada después de abrir',money(reinv),'sum')+'<p class="help" style="margin:6px 0 0">Sale del dinero de las ventas, así que no hay que anotarla como aporte.</p>')+'</div>';
@@ -966,16 +966,24 @@ function saveAporte(id){
   closeModal();toast('Aporte guardado');
 }
 function openGastoInv(id){
-  var r=id?S.invest[id]:null;
-  openModal('<h3>'+(r?'Editar gasto':'Gasto de inversión')+'</h3><label>Descripción<input id="g-desc" autocomplete="off" placeholder="Estantes, equipos, adecuaciones…" value="'+esc(r?r.desc:'')+'"></label><label>Monto (CUP)<input id="g-amt" inputmode="decimal" value="'+(r?r.amount:'')+'"></label>'+
+  var r=id?S.invest[id]:null,usd=!!(r&&r.usd>0);
+  openModal('<h3>'+(r?'Editar gasto':'Gasto de inversión')+'</h3><label>Descripción<input id="g-desc" autocomplete="off" placeholder="Estantes, equipos, adecuaciones…" value="'+esc(r?r.desc:'')+'"></label>'+
+  '<div class="fg"><label>Monto<input id="g-amt" inputmode="decimal" value="'+(r?(usd?r.usd:r.amount):'')+'"></label><label>Moneda<select id="g-cur"><option value="CUP"'+(usd?'':' selected')+'>CUP</option><option value="USD"'+(usd?' selected':'')+'>USD</option></select></label></div>'+
+  '<label id="g-rl" style="display:'+(usd?'block':'none')+'">Tasa de cambio (CUP por USD)<input id="g-rate" inputmode="decimal" value="'+(usd?r.rate:S.settings.rate)+'"></label><div class="help" id="g-prev"></div>'+
   '<button class="btn primary big" data-act="gasto-save" data-id="'+(r?r.id:'')+'">Guardar gasto</button>'+(r?'<div class="btns"><button class="btn danger" data-act="inv-del" data-id="'+r.id+'">Eliminar gasto</button></div>':''));
+  updateGa();
   if(!r)setTimeout(function(){var e=$('#g-desc');if(e)e.focus();},60);
 }
+function updateGa(){
+  var usd=val('g-cur')==='USD',rl=$('#g-rl');if(rl)rl.style.display=usd?'block':'none';
+  var a=num(val('g-amt')),r=num(val('g-rate')),pv=$('#g-prev');if(pv)pv.textContent=usd&&a>0&&r>0?'= '+money(a*r):'';
+}
 function saveGastoInv(id){
-  var d=val('g-desc').trim(),a=num(val('g-amt'));
+  var d=val('g-desc').trim(),a=num(val('g-amt')),usd=val('g-cur')==='USD',r=num(val('g-rate'));
   if(!d||a<=0){toast('Completa descripción y monto');return;}
+  if(usd&&r<=0){toast('Indica la tasa de cambio');return;}
   var old=id?S.invest[id]:null,ts=old?old.ts:Date.now();
-  put('invest',Object.assign({},old||{},{id:id||uid(),kind:'gasto',ts:ts,day:dayKey(ts),desc:d,amount:a}));
+  put('invest',Object.assign({},old||{},{id:id||uid(),kind:'gasto',ts:ts,day:dayKey(ts),desc:d,amount:r2(usd?a*r:a),usd:usd?a:0,rate:usd?r:0}));
   closeModal();toast('Gasto guardado');
 }
 
@@ -1197,6 +1205,7 @@ document.addEventListener('input',function(e){
   else if(t.id&&t.id.indexOf('rp-u-')===0)repayFill('line');
   else if(t.id==='p-cup'||t.id==='p-usd'||t.id==='p-tr')refreshTotals();
   else if(t.id==='v-amt'||t.id==='v-cur'||t.id==='v-rate')updateAp();
+  else if(t.id==='g-amt'||t.id==='g-cur'||t.id==='g-rate')updateGa();
   else if(t.id==='f-cost'||t.id==='f-ccur'||t.id==='f-margin')updateSugg();
   else if(t.id==='f-price')updateSugg('price');
   else if(t.id==='f-pusd')updateSugg('pusd');
