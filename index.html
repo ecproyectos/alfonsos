@@ -725,9 +725,11 @@ function saveProduct(id){
   var rec=Object.assign({},old||{},{id:id||uid(),name:name,cat:val('f-cat').trim(),price:price,cost:cc,ccur:cur,costUSD:cur==='USD'?c:0,margin:(num(val('f-margin'))===S.settings.margin?null:num(val('f-margin'))),peg:peg,priceUSD:peg?pusd:0,min:num(val('f-min')),unit:val('f-unit')==='kg'?'kg':'u'});
   var stCur=id?stockOf(id):0,stNew=(id&&val('f-stockcur')!=='')?num(val('f-stockcur')):stCur;
   put('products',rec);
+  var synced=0;
+  if(id&&cc>0&&openTs()===Infinity){Object.keys(S.entries).forEach(function(k){var e=S.entries[k];if(e.pid===id&&!e.del&&e.type==='inicial'&&Math.abs((e.cost||0)-cc)>1e-9){put('entries',Object.assign({},e,{cost:cc}));synced++;}});}
   if(id&&Math.abs(stNew-stCur)>1e-9)put('entries',{id:uid(),pid:id,qty:r3(stNew-stCur),type:'ajuste',cost:0,note:'Corrección de existencia',ts:Date.now()});
   if(!id){var st=num(val('f-stock'));if(st>0)put('entries',{id:uid(),pid:rec.id,qty:st,type:'inicial',cost:cc,note:'',ts:Date.now()});}
-  closeModal();toast('Producto guardado');
+  closeModal();toast(synced?'Producto guardado. El costo de la compra inicial se actualizó a '+fmt(cc):'Producto guardado');
 }
 function openEntry(id){
   var p=S.products[id];if(!p)return;
