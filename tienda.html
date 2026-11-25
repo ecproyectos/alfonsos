@@ -101,6 +101,8 @@ header{background:var(--g);color:var(--cream);border-bottom:2px solid var(--ink)
 .sk{height:210px;border:1.5px solid var(--ink);border-radius:var(--r);background:linear-gradient(90deg,#fff7df,#f3e6bd,#fff7df);background-size:200% 100%;animation:sk 1.2s infinite linear}
 @keyframes sk{to{background-position:-200% 0}}
 .top{display:none}
+.pk{border-top:1px dashed var(--ink);padding-top:8px;display:flex;flex-direction:column;gap:6px}.pkh{display:flex;justify-content:space-between;gap:6px;font-size:14px}.pkh span{font-weight:900}
+.pks{grid-column:1/-1;display:flex;flex-direction:column;gap:8px}.pks .pk{flex-direction:row;align-items:center;justify-content:space-between}.pks .pkh{flex-direction:column;gap:0}.pks .st,.pks .bt{width:150px;flex:none}
 footer{text-align:center;color:var(--mute);font-size:12px;margin:26px 0 0}
 .logo{display:flex;align-items:center;gap:9px}.logo .mk{width:38px;height:38px}.logo .wm{height:24px;width:auto}
 .loc{text-align:center;font-size:13.5px;font-weight:700;color:var(--gd);margin:-4px 0 12px;line-height:1.5}
@@ -124,7 +126,21 @@ function money(n){n=Math.round(n*100)/100;return '$'+n.toLocaleString('es',{maxi
 function qtyTxt(it,q){return it.unit==='kg'?(Math.round(q*100)/100).toString().replace('.',',')+' kg':String(q);}
 function step(it){return it.unit==='kg'?0.25:1;}
 function lineTotal(it,q){var t=it.price*q;if(it.unit!=='kg')return Math.round(t*100)/100;var r=+info.round||0;if(r<=0)return Math.round(t*100)/100;if(t<50&&r>1)r=1;return Math.ceil(t/r-1e-9)*r;}
-function byId(id){for(var i=0;i<items.length;i++)if(items[i].id===id)return items[i];return null;}
+function byId(id){
+  var m=String(id).split('#'),b=null;
+  for(var i=0;i<items.length;i++)if(items[i].id===m[0]){b=items[i];break;}
+  if(!b||m.length<2)return b;
+  var pk=null;(b.packs||[]).forEach(function(k){if(String(k.i)===m[1])pk=k;});
+  if(!pk)return null;
+  return {id:id,pid:b.id,name:b.name+' ('+pk.name+' ×'+pk.n+')',price:pk.price,unit:'u',avail:Math.floor(b.avail/pk.n),n:pk.n,ph:b.ph,cat:b.cat};
+}
+function maxFor(key){
+  var it=byId(key);if(!it)return 0;var pid=it.pid||it.id,real=byId(pid);if(!real)return 0;var other=0;
+  Object.keys(cart).forEach(function(k){if(k===key)return;var o=byId(k);if(o&&(o.pid||o.id)===pid)other+=cart[k]*(o.n||1);});
+  var n=it.n||1,v=(real.avail-other)/n;
+  return Math.max(0,n>1?Math.floor(v+1e-9):Math.floor(v*100+1e-9)/100);
+}
+function itemTxt(l){return l.pk?(l.pc||Math.round(l.qty/l.pk))+' × '+l.name+' ('+(l.pname||'Paquete')+' de '+l.pk+')':qtyTxt(l,l.qty)+' × '+l.name;}
 function waNum(p){var d=String(p||'').replace(/\D/g,'');if(d.length===8&&d[0]==='5')d='53'+d;return d;}
 function img(it,big){return SB.url+'/storage/v1/object/public/fotos/'+(big?'p':'t')+'/'+encodeURIComponent(it.id)+'.jpg?v='+it.ph;}
 var COLORS=['#cfe3d6','#ffd9c2','#fbe6a2','#d7d3f3','#c8e6f5','#f6cfd8'];
@@ -143,18 +159,19 @@ function load(){
   });
 }
 function fixCart(){
-  var ch=false;Object.keys(cart).forEach(function(id){var it=byId(id);if(!it||cart[id]<=0){delete cart[id];ch=true;}else if(cart[id]>it.avail){cart[id]=it.avail;ch=true;}});
+  var ch=false;Object.keys(cart).forEach(function(id){var it=byId(id);if(!it||cart[id]<=0){delete cart[id];ch=true;return;}var mx=maxFor(id);if(mx<=0){delete cart[id];ch=true;}else if(cart[id]>mx){cart[id]=mx;ch=true;}});
   if(ch)ls(K.cart,cart);
 }
 /* ---------- carrito ---------- */
 function count(){return Object.keys(cart).length;}
 function total(){var t=0;Object.keys(cart).forEach(function(id){var it=byId(id);if(it)t+=lineTotal(it,cart[id]);});return t;}
-function setQ(id,q){var it=byId(id);if(!it)return;q=Math.round(q*100)/100;if(q<=0){delete cart[id];}else{if(q>it.avail)q=it.avail;cart[id]=q;}ls(K.cart,cart);}
+function setQ(id,q){var it=byId(id);if(!it)return;q=Math.round(q*100)/100;if(q>0){var mx=maxFor(id);if(q>mx)q=mx;}if(q<=0){delete cart[id];}else{cart[id]=q;}ls(K.cart,cart);}
 function ctl(it){
   var q=cart[it.id];
   if(!q)return '<button class="bt" data-a="add" data-id="'+esc(it.id)+'" type="button">Agregar'+(it.unit==='kg'?' (0,5 kg)':'')+'</button>';
   return '<div class="st"><button data-a="dec" data-id="'+esc(it.id)+'" type="button" aria-label="Quitar">−</button><b>'+qtyTxt(it,q)+'</b><button data-a="inc" data-id="'+esc(it.id)+'" type="button" aria-label="Agregar uno más">+</button></div>';
 }
+function packRows(it){return (it.packs||[]).map(function(k){var v=byId(it.id+'#'+k.i);if(!v||(v.avail<1&&!cart[v.id]))return '';return '<div class="pk"><div class="pkh"><b>'+esc(k.name)+' ×'+k.n+'</b><span>'+money(k.price)+'</span></div>'+ctl(v)+'</div>';}).join('');}
 function priceTxt(it){return money(it.price)+(it.unit==='kg'?' /kg':'');}
 /* ---------- vistas ---------- */
 function cats(){var m={},o=[];items.forEach(function(it){if(!m[it.cat]){m[it.cat]=1;o.push(it.cat);}});return o;}
@@ -162,11 +179,11 @@ function visible(){var q=ui.q.trim().toLowerCase();return items.filter(function(
 function card(it){
   var low=it.avail<=3&&it.unit!=='kg';
   var pic=(ui.photos&&it.ph)?'<img src="'+esc(img(it))+'" alt="" loading="lazy" decoding="async" onerror="this.parentNode.classList.add(\'noimg\');this.remove()">':'';
-  return '<article class="card" data-id="'+esc(it.id)+'"><div class="ph" style="--c:'+colorOf(it.name)+'">'+(pic||'<span class="ini">'+esc(it.name.charAt(0).toUpperCase())+'</span>')+'<span class="sticker">'+priceTxt(it)+'</span>'+(low?'<span class="low">Quedan '+it.avail+'</span>':'')+'</div><div class="cb"><div class="nm">'+esc(it.name)+'</div>'+ctl(it)+'</div></article>';
+  return '<article class="card" data-id="'+esc(it.id)+'"><div class="ph" style="--c:'+colorOf(it.name)+'">'+(pic||'<span class="ini">'+esc(it.name.charAt(0).toUpperCase())+'</span>')+'<span class="sticker">'+priceTxt(it)+'</span>'+(low?'<span class="low">Quedan '+it.avail+'</span>':'')+'</div><div class="cb"><div class="nm">'+esc(it.name)+'</div>'+ctl(it)+packRows(it)+'</div></article>';
 }
 function rowOf(it){
   var low=it.avail<=3&&it.unit!=='kg';
-  return '<div class="row"><div><div class="nm">'+esc(it.name)+'</div><span class="pr">'+priceTxt(it)+'</span>'+(low?' <small style="color:var(--tom);font-weight:800">Quedan '+it.avail+'</small>':'')+'</div><div class="ctl">'+ctl(it)+'</div></div>';
+  return '<div class="row"><div><div class="nm">'+esc(it.name)+'</div><span class="pr">'+priceTxt(it)+'</span>'+(low?' <small style="color:var(--tom);font-weight:800">Quedan '+it.avail+'</small>':'')+'</div><div class="ctl">'+ctl(it)+'</div>'+(packRows(it)?'<div class="pks">'+packRows(it)+'</div>':'')+'</div>';
 }
 function draw(){
   $('#shop').textContent=info.name||'Tienda';document.title=(info.name||'Tienda')+' · Tienda en línea';
@@ -202,7 +219,7 @@ function sheet(){
   var h='<div class="sh"><div class="x"><button class="back" data-a="close" type="button">‹ Seguir comprando</button></div>';
   if(ui.done){var d=ui.done;
     h+='<div class="ok"><div style="font-size:54px">🎉</div><h2>¡Pedido recibido!</h2><p class="help" style="font-size:15px">Tu código:</p><div class="code">'+esc(d.code)+'</div>'+
-    '<div class="sum">'+d.items.map(function(l){return '<div><span>'+esc(qtyTxt(l,l.qty))+' × '+esc(l.name)+'</span><b>'+money(l.sub)+'</b></div>';}).join('')+'<div style="border-top:2px solid var(--ink);margin-top:6px;padding-top:8px;font-size:20px"><b>Total</b><b>'+money(d.total)+'</b></div></div>'+
+    '<div class="sum">'+d.items.map(function(l){return '<div><span>'+esc(itemTxt(l))+'</span><b>'+money(l.sub)+'</b></div>';}).join('')+'<div style="border-top:2px solid var(--ink);margin-top:6px;padding-top:8px;font-size:20px"><b>Total</b><b>'+money(d.total)+'</b></div></div>'+
     '<ol class="steps"><li>Toca el botón verde para enviarnos tu pedido por WhatsApp.</li><li>Te confirmamos la disponibilidad y '+(d.mode==='domicilio'?'el costo del domicilio':'cuándo puedes recoger')+'.</li><li>Pagas al '+(d.mode==='domicilio'?'recibirlo':'recogerlo')+' (efectivo o transferencia).</li></ol>'+
     (info.wa?'<a class="bt wa big" style="display:block;text-decoration:none;text-align:center" id="wa" href="'+esc(waLink(d))+'" target="_blank" rel="noopener">Enviar mi pedido por WhatsApp</a>':'')+
     '<p class="help">Tu pedido queda reservado por '+Math.round(info.hold||24)+' horas.</p><button class="bt alt" style="margin-top:8px" data-a="again" type="button">Hacer otro pedido</button></div></div>';
@@ -223,7 +240,7 @@ function sheet(){
 }
 function waLink(d){
   var L=['*Pedido '+d.code+'* — '+(info.name||'Tienda'),'Cliente: '+d.name+' (+'+waNum(d.phone).replace(/^(53)/,'$1 ')+')',d.mode==='domicilio'?'🛵 Domicilio: '+d.addr:'🏪 Recoge en el mercado',''];
-  d.items.forEach(function(l){L.push('• '+qtyTxt(l,l.qty)+' × '+l.name+' — '+money(l.sub));});
+  d.items.forEach(function(l){L.push('• '+itemTxt(l)+' — '+money(l.sub));});
   L.push('','*Total: '+money(d.total)+'*');if(d.note)L.push('Nota: '+d.note);
   return 'https://wa.me/'+waNum(info.wa)+'?text='+encodeURIComponent(L.join('\n'));
 }
@@ -237,7 +254,7 @@ function send(){
   else if(cust.mode==='domicilio'&&cust.addr.trim().length<5)ui.err='Escribe tu dirección para el domicilio.';
   if(ui.err){sheet();return;}
   ui.busy=true;sheet();
-  var ph=cust.phone,lines=Object.keys(cart).map(function(id){return {pid:id,qty:cart[id]};});
+  var ph=cust.phone,lines=Object.keys(cart).map(function(id){var m=id.split('#');return m.length>1?{pid:m[0],pk:+m[1],qty:cart[id]}:{pid:id,qty:cart[id]};});
   rpc('place_order',{p_name:cust.name.trim(),p_phone:cust.phone,p_mode:cust.mode,p_addr:cust.addr.trim(),p_note:cust.note.trim(),p_items:lines}).then(function(r){
     ui.busy=false;
     if(r&&r.ok){ui.done={code:r.code,total:r.total,items:r.items,name:cust.name.trim(),phone:ph.replace(/\D/g,''),mode:cust.mode,addr:cust.mode==='domicilio'?cust.addr.trim():'',note:cust.note.trim()};cart={};ls(K.cart,cart);cust.note='';ls(K.cust,cust);sheet();load();}
