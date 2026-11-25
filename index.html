@@ -526,7 +526,7 @@ function viewCaja(){
   if(!list.length)return h+'<p class="muted center">Sin resultados.</p>';
   h+='<div class="grid">'+list.map(function(p){
     var st=stockOf(p.id),out=st<=0&&!S.settings.allowNegative;
-    return '<button class="prod'+(out?' out':isLow(p)?' low':'')+'" data-act="add" data-id="'+p.id+'"><b>'+esc(p.name)+'</b><span class="pr">'+mCUP(priceOf(p))+(p.peg?' (USD)':'')+(p.unit==='kg'?' /kg':'')+'</span><small>'+(st<=0?'Agotado':isLow(p)?'⚠ Quedan '+fmtq(st)+(p.unit==='kg'?' kg':''):fmtq(st)+(p.unit==='kg'?' kg':'')+' disp.')+(packsOf(p).length?' · paquetes':'')+'</small></button>';
+    return '<button class="prod'+(out?' out':isLow(p)?' low':'')+'" data-act="add" data-id="'+p.id+'"><b>'+esc(p.name)+'</b><span class="pr">'+mCUP(priceOf(p))+(p.peg?' (USD)':'')+(p.unit==='kg'?' /'+UL(p):'')+'</span><small>'+(st<=0?'Agotado':isLow(p)?'⚠ Quedan '+fmtq(st)+(p.unit==='kg'?' '+UL(p):''):fmtq(st)+(p.unit==='kg'?' '+UL(p):'')+' disp.')+(packsOf(p).length?' · paquetes':'')+'</small></button>';
   }).join('')+'</div>';
   return h;
 }
@@ -657,7 +657,8 @@ function lowLimit(){var n=S.settings.lowStock;return (n==null||isNaN(n))?3:n;}
 function minOf(p){return p.min>0?p.min:lowLimit();}
 function isLow(p){var st=stockOf(p.id);return !p.del&&!isOut(p)&&st>0&&st<=minOf(p);}
 function lowList(){return products().filter(isLow).sort(function(a,b){return stockOf(a.id)-stockOf(b.id)||a.name.localeCompare(b.name,'es');});}
-function lowTxt(p){var st=stockOf(p.id);return p.name+' ('+(st===1&&p.unit!=='kg'?'1 u.':fmtq(st)+(p.unit==='kg'?' kg':' u.'))+')';}
+function UL(p){return p&&p.ul==='lb'?'lb':'kg';}
+function lowTxt(p){var st=stockOf(p.id);return p.name+' ('+(st===1&&p.unit!=='kg'?'1 u.':fmtq(st)+(p.unit==='kg'?' '+UL(p):' u.'))+')';}
 function viewInv(){
   var all=products(),q=ui.invQ.trim().toLowerCase();
   var out=all.filter(isOut),prods=all.filter(function(p){return !isOut(p);});
@@ -669,7 +670,7 @@ function viewInv(){
   var list=prods.filter(function(p){return !q||p.name.toLowerCase().indexOf(q)>-1||(p.cat||'').toLowerCase().indexOf(q)>-1;}).sort(function(a,b){return a.name.localeCompare(b.name,'es');});
   h+=(list.length?'<div class="card" style="padding:4px 14px">'+list.map(function(p){
     var st=stockOf(p.id),cls=st<=0?'out':st<=minOf(p)?'low':'';
-    return '<button class="item" data-act="prod-edit" data-id="'+p.id+'"><div><b>'+esc(p.name)+'</b><small>'+esc(p.cat||'Sin categoría')+' · costo '+fmt(p.cost||0)+(p.cost>0?' · +'+Math.round((priceOf(p)/p.cost-1)*100)+'%':'')+'</small></div><div class="r"><b>'+mCUP(priceOf(p))+(p.peg?' (USD)':'')+(p.unit==='kg'?' /kg':'')+'</b><br><span class="badge '+cls+'">'+(st<=0?'Sin existencias':(cls==='low'?'⚠ Quedan ':'')+fmtq(st)+(p.unit==='kg'?' kg':' u.'))+'</span></div></button>';
+    return '<button class="item" data-act="prod-edit" data-id="'+p.id+'"><div><b>'+esc(p.name)+'</b><small>'+esc(p.cat||'Sin categoría')+' · costo '+fmt(p.cost||0)+(p.cost>0?' · +'+Math.round((priceOf(p)/p.cost-1)*100)+'%':'')+'</small></div><div class="r"><b>'+mCUP(priceOf(p))+(p.peg?' (USD)':'')+(p.unit==='kg'?' /'+UL(p):'')+'</b><br><span class="badge '+cls+'">'+(st<=0?'Sin existencias':(cls==='low'?'⚠ Quedan ':'')+fmtq(st)+(p.unit==='kg'?' '+UL(p):' u.'))+'</span></div></button>';
   }).join('')+'</div>':'<p class="muted center">'+(prods.length?'Sin resultados.':'Todo está agotado. Repón desde la sección Agotados.')+'</p>')+'<div class="btns"><button class="btn" data-act="import-open">Importar lista de productos</button><button class="btn" data-act="reprice">Recalcular precios con el margen</button></div>';
   return h+agotadosHtml(out);
 }
@@ -690,7 +691,7 @@ function agotadosHtml(out){
   }).join('')+
   hid.map(function(p){
     var cost=r2(sum(Object.keys(S.entries).map(function(k){return S.entries[k];}).filter(function(e){return e.pid===p.id&&!e.del;}),function(e){return e.qty*(e.cost||0);}));
-    return line('<b>'+esc(p.name)+'</b> <small class="muted">(oculto)</small><br><small class="muted">'+fmtq(stockOf(p.id))+(p.unit==='kg'?' kg':' u.')+' · compras '+money(cost)+'</small>',
+    return line('<b>'+esc(p.name)+'</b> <small class="muted">(oculto)</small><br><small class="muted">'+fmtq(stockOf(p.id))+(p.unit==='kg'?' '+UL(p):' u.')+' · compras '+money(cost)+'</small>',
       '<button class="chip" data-act="prod-restore" data-id="'+p.id+'">Restaurar</button><button class="chip" data-act="prod-del" data-id="'+p.id+'">Eliminar</button>');
   }).join('')+'</details>';
 }
@@ -713,7 +714,7 @@ function openProduct(id){
   openModal('<h3>'+(p?'Producto':'Nuevo producto')+'</h3>'+
   (sbOn()&&sess&&sess.role==='admin'?photoBox(p):'')+
   '<label>Nombre<input id="f-name" value="'+esc(p?p.name:'')+'" autocomplete="off"></label>'+
-  '<label>Se vende por<select id="f-unit"><option value="u"'+(p&&p.unit==='kg'?'':' selected')+'>Unidad</option><option value="kg"'+(p&&p.unit==='kg'?' selected':'')+'>Kilogramo (a granel: sacos, bolsas de 500 g, 1 kg…)</option></select></label>'+
+  '<label>Se vende por<select id="f-unit"><option value="u"'+(p&&p.unit==='kg'?'':' selected')+'>Unidad</option><option value="kg"'+(p&&p.unit==='kg'&&p.ul!=='lb'?' selected':'')+'>Kilogramo (a granel: sacos, bolsas de 500 g, 1 kg…)</option><option value="lb"'+(p&&p.unit==='kg'&&p.ul==='lb'?' selected':'')+'>Libra (carne, a granel)</option></select></label>'+
   (p?'<label>En existencia (corrígela aquí si hubo un error)<input id="f-stockcur" inputmode="decimal" value="'+stockOf(p.id)+'"></label>':'')+
   '<div class="fg"><label>Costo de compra<input id="f-cost" inputmode="decimal" value="'+costShown+'"></label><label>Moneda del costo<select id="f-ccur"><option value="CUP"'+(ccur==='CUP'?' selected':'')+'>CUP</option><option value="USD"'+(ccur==='USD'?' selected':'')+'>USD</option></select></label></div>'+
   '<div class="card" id="sugbox"></div>'+
@@ -746,7 +747,7 @@ function saveProduct(id){
   if(peg&&pusd<=0){toast('Indica el precio en USD para atarlo al dólar');return;}
   if(peg)price=roundUp(pusd*rate());
   var old=id?S.products[id]:null;
-  var rec=Object.assign({},old||{},{id:id||uid(),name:name,cat:val('f-cat').trim(),price:price,cost:cc,ccur:cur,costUSD:cur==='USD'?c:0,margin:(num(val('f-margin'))===S.settings.margin?null:num(val('f-margin'))),peg:peg,priceUSD:peg?pusd:0,min:num(val('f-min')),unit:val('f-unit')==='kg'?'kg':'u'});
+  var rec=Object.assign({},old||{},{id:id||uid(),name:name,cat:val('f-cat').trim(),price:price,cost:cc,ccur:cur,costUSD:cur==='USD'?c:0,margin:(num(val('f-margin'))===S.settings.margin?null:num(val('f-margin'))),peg:peg,priceUSD:peg?pusd:0,min:num(val('f-min')),unit:val('f-unit')==='u'?'u':'kg',ul:val('f-unit')==='lb'?'lb':null});
   var stCur=id?stockOf(id):0,stNew=(id&&val('f-stockcur')!=='')?num(val('f-stockcur')):stCur;
   var shEl=$('#f-shop');if(shEl)rec.shop=!!shEl.checked;
   rec.packs=[];
@@ -772,8 +773,8 @@ function openEntry(id){
   var p=S.products[id];if(!p)return;
   ui.entryId=id;
   var cur=p.ccur==='USD'&&p.costUSD>0?'USD':'CUP',c=cur==='USD'?p.costUSD:(p.cost||'');
-  openModal('<h3>Entrada · '+esc(p.name)+'</h3>'+(packsOf(p).length?'<div class="card"><b>Compra por paquete</b><div class="fg"><label>Paquete<select id="e-pkpick">'+packsOf(p).map(function(k,i){return '<option value="'+i+'">'+esc(k.name)+' ×'+k.n+'</option>';}).join('')+'</select></label><label>Cantidad de paquetes<input id="e-pkcnt" inputmode="decimal"></label></div><label>Costo por paquete<input id="e-pkcost" inputmode="decimal"></label><span class="muted" style="font-size:14px">Calcula solo las unidades y el costo por unidad. Si no compras por paquete, escribe las unidades abajo.</span></div>':'')+(p.unit==='kg'?'<div class="card"><b>Compra por sacos</b><div class="fg"><label>Sacos<input id="e-sacks" inputmode="decimal"></label><label>Kg por saco<input id="e-kgs" inputmode="decimal"></label></div><label>Costo por saco<input id="e-sackcost" inputmode="decimal"></label><span class="muted" style="font-size:14px">Calcula solo los kg y el costo por kg. Si no compras por sacos, escribe los kg abajo.</span></div>':'')+'<div class="fg"><label>Cantidad'+(p.unit==='kg'?' (kg)':'')+'<input id="e-qty" inputmode="decimal"></label><label>Moneda del costo<select id="e-ccur"><option value="CUP"'+(cur==='CUP'?' selected':'')+'>CUP</option><option value="USD"'+(cur==='USD'?' selected':'')+'>USD</option></select></label></div>'+
-  '<label>Costo '+(p.unit==='kg'?'por kg':'unitario')+'<input id="e-cost" inputmode="decimal" value="'+c+'"></label><div class="card" id="esug"></div>'+
+  openModal('<h3>Entrada · '+esc(p.name)+'</h3>'+(packsOf(p).length?'<div class="card"><b>Compra por paquete</b><div class="fg"><label>Paquete<select id="e-pkpick">'+packsOf(p).map(function(k,i){return '<option value="'+i+'">'+esc(k.name)+' ×'+k.n+'</option>';}).join('')+'</select></label><label>Cantidad de paquetes<input id="e-pkcnt" inputmode="decimal"></label></div><label>Costo por paquete<input id="e-pkcost" inputmode="decimal"></label><span class="muted" style="font-size:14px">Calcula solo las unidades y el costo por unidad. Si no compras por paquete, escribe las unidades abajo.</span></div>':'')+(p.unit==='kg'?'<div class="card"><b>Compra por sacos</b><div class="fg"><label>Sacos<input id="e-sacks" inputmode="decimal"></label><label>'+UL(p)+' por saco<input id="e-kgs" inputmode="decimal"></label></div><label>Costo por saco<input id="e-sackcost" inputmode="decimal"></label><span class="muted" style="font-size:14px">Calcula solo la cantidad y el costo por '+UL(p)+'. Si no compras por sacos, escríbela abajo.</span></div>':'')+'<div class="fg"><label>Cantidad'+(p.unit==='kg'?' ('+UL(p)+')':'')+'<input id="e-qty" inputmode="decimal"></label><label>Moneda del costo<select id="e-ccur"><option value="CUP"'+(cur==='CUP'?' selected':'')+'>CUP</option><option value="USD"'+(cur==='USD'?' selected':'')+'>USD</option></select></label></div>'+
+  '<label>Costo '+(p.unit==='kg'?'por '+UL(p):'unitario')+'<input id="e-cost" inputmode="decimal" value="'+c+'"></label><div class="card" id="esug"></div>'+
   '<label style="display:flex;gap:8px;align-items:center;color:var(--ink)"><input type="checkbox" id="e-upd" style="width:auto"> Actualizar el precio de venta al sugerido</label>'+
   '<label>Proveedor / nota<input id="e-note" autocomplete="off"></label><button class="btn primary big" data-act="entry-save" data-id="'+id+'">Registrar entrada</button>');
   var u=$('#e-upd');if(u)u.checked=!(priceOf(p)>0);
@@ -846,15 +847,15 @@ function pkEntryCalc(){
   updateEsug();
 }
 function packPrice(p,kg){var raw=priceOf(p)*kg;return roundUp(raw)||r2(raw);}
-function wtLabel(g){return g<1000?g+' g':fmtq(g/1000)+' kg';}
+function wtLabel(g,lb){return lb?fmtq(g/1000)+' lb':g<1000?g+' g':fmtq(g/1000)+' kg';}
 function openWeight(id){
   var p=S.products[id];if(!p)return;
   ui.wtId=id;
-  openModal('<h3>'+esc(p.name)+'</h3><p class="help">'+mCUP(priceOf(p))+' por kg · En existencia: <b>'+fmtq(stockOf(id))+' kg</b></p><div class="wtgrid">'+
-  [250,500,1000,2000].map(function(g){return '<button class="btn" data-act="wt-add" data-id="'+id+'" data-g="'+g+'"><b>'+wtLabel(g)+'</b><small>'+mCUP(packPrice(p,g/1000))+'</small></button>';}).join('')+'</div>'+
-  '<label>Otro peso (gramos)<input id="w-g" inputmode="decimal" placeholder="750"></label><div class="help" id="w-prev"></div><button class="btn primary big" data-act="wt-custom" data-id="'+id+'">Agregar al carrito</button>');
+  openModal('<h3>'+esc(p.name)+'</h3><p class="help">'+mCUP(priceOf(p))+' por '+UL(S.products[id])+' · En existencia: <b>'+fmtq(stockOf(id))+' '+UL(p)+'</b></p><div class="wtgrid">'+
+  [250,500,1000,2000].map(function(g){return '<button class="btn" data-act="wt-add" data-id="'+id+'" data-g="'+g+'"><b>'+wtLabel(g,UL(p)==='lb')+'</b><small>'+mCUP(packPrice(p,g/1000))+'</small></button>';}).join('')+'</div>'+
+  '<label>'+(UL(p)==='lb'?'Otra cantidad (lb)':'Otro peso (gramos)')+'<input id="w-g" inputmode="decimal" placeholder="'+(UL(p)==='lb'?'1,5':'750')+'"></label><div class="help" id="w-prev"></div><button class="btn primary big" data-act="wt-custom" data-id="'+id+'">Agregar al carrito</button>');
 }
-function updateW(){var p=S.products[ui.wtId],pv=$('#w-prev');if(!p||!pv)return;var g=num(val('w-g'));pv.textContent=g>0?wtLabel(g)+' = '+mCUP(packPrice(p,g/1000)):'';}
+function updateW(){var p=S.products[ui.wtId],pv=$('#w-prev');if(!p||!pv)return;var lb=UL(p)==='lb',g=num(val('w-g'))*(lb?1000:1);pv.textContent=g>0?wtLabel(g,lb)+' = '+mCUP(packPrice(p,g/1000)):'';}
 function addWeight(id,kg){
   var p=S.products[id];if(!p||!(kg>0))return;
   kg=r3(kg);
@@ -863,7 +864,7 @@ function addWeight(id,kg){
   var price=r2(packPrice(p,kg)/kg);
   pushUndo();
   var l=ui.cart.filter(function(x){return x.pid===id&&x.unit==='kg'&&Math.abs(x.price-price)<0.0001;})[0];
-  if(l)l.qty=r3(l.qty+kg);else ui.cart.push({pid:id,name:p.name+' (kg)',price:price,qty:kg,unit:'kg'});
+  if(l)l.qty=r3(l.qty+kg);else ui.cart.push({pid:id,name:p.name+' ('+UL(p)+')',price:price,qty:kg,unit:'kg',ul:UL(p)});
   closeModal();render();
 }
 function hasSales(id){
@@ -1074,7 +1075,7 @@ function waDigits(ph){var d=String(ph||'').replace(/\D/g,'');if(d.length===8&&d[
 function phoneTxt(ph){var d=waDigits(ph);return d.length>8&&d.slice(0,2)==='53'?'+53 '+d.slice(2):'+'+d;}
 function pedLeft(p){var m=Math.round((p.exp-Date.now())/60000);if(m<=0)return 'vencido';return 'reservado '+(m>=60?Math.floor(m/60)+' h '+(m%60)+' min':m+' min');}
 function pedItem(l){return l.pk?fmtq(l.pc||l.qty/l.pk)+' × '+l.name+' ('+(l.pname||'Paquete')+' de '+l.pk+')':pedQty(l)+' × '+l.name;}
-function pedQty(l){return l.unit==='kg'?fmtq(l.qty)+' kg':fmtq(l.qty);}
+function pedQty(l){return l.unit==='kg'?fmtq(l.qty)+' '+UL(S.products[l.pid]):fmtq(l.qty);}
 function pedWa(p){
   var L=['Hola '+p.name+', te escribimos de '+(S.settings.name||'la tienda')+'.','Recibimos tu pedido *'+p.code+'*:'];
   p.items.forEach(function(l){L.push('• '+pedItem(l)+' — '+money(l.sub));});
@@ -1264,7 +1265,7 @@ var H={
     openProduct(e.pid);toast('Movimiento eliminado');
   },
   'wt-add':function(t){addWeight(t.dataset.id,(+t.dataset.g)/1000);},
-  'wt-custom':function(t){var g=num(val('w-g'));if(!(g>0)){toast('Indica los gramos');return;}addWeight(t.dataset.id,g/1000);},
+  'wt-custom':function(t){var lb=UL(S.products[t.dataset.id])==='lb',g=num(val('w-g'))*(lb?1000:1);if(!(g>0)){toast(lb?'Indica las libras':'Indica los gramos');return;}addWeight(t.dataset.id,g/1000);},
   'prod-archive':function(t){if(!armed(t,'¿Seguro? Toca de nuevo'))return;var p=S.products[t.dataset.id];if(p)put('products',Object.assign({},p,{del:true}));closeModal();toast('Producto marcado como agotado. Búscalo en Inventario → Agotados');},
   'entry-open':function(t){openEntry(t.dataset.id);},
   'entry-save':function(t){saveEntry(t.dataset.id);},
@@ -1310,7 +1311,7 @@ var H={
   'ped-wa':function(t){var p=S.pedidos[t.dataset.id];if(p)window.open(pedWa(p),'_blank');},
   'ped-pay':function(t){
     var p=S.pedidos[t.dataset.id];if(!p)return;var miss=[];
-    var cart=p.items.map(function(l){var pr=S.products[l.pid];if(!pr||pr.del||(!S.settings.allowNegative&&stockOf(l.pid)<l.qty-1e-9))miss.push(l.name);return {pid:l.pid,name:l.pk?l.name+' ('+(l.pname||'Paquete')+' ×'+l.pk+')':l.name+(l.unit==='kg'?' (kg)':''),price:l.qty>0?r4(l.sub/l.qty):l.price,qty:l.qty,unit:l.unit==='kg'?'kg':undefined,pk:l.pk||undefined};});
+    var cart=p.items.map(function(l){var pr=S.products[l.pid];if(!pr||pr.del||(!S.settings.allowNegative&&stockOf(l.pid)<l.qty-1e-9))miss.push(l.name);return {pid:l.pid,name:l.pk?l.name+' ('+(l.pname||'Paquete')+' ×'+l.pk+')':l.name+(l.unit==='kg'?' ('+UL(S.products[l.pid])+')':''),price:l.qty>0?r4(l.sub/l.qty):l.price,qty:l.qty,unit:l.unit==='kg'?'kg':undefined,pk:l.pk||undefined};});
     if(miss.length){toast('No alcanza la mercancía de: '+miss.join(', '));return;}
     ui.cart=cart;ui.undo=[];ui.orderId=p.id;ui.tab='caja';closeModal();render();openCart();
   },
