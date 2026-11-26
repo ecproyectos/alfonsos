@@ -1095,10 +1095,27 @@ function pedCard(p){
   (open?'<div class="btns"><button class="btn" data-act="ped-wa" data-id="'+p.id+'">💬 WhatsApp al cliente</button><button class="btn primary" data-act="ped-pay" data-id="'+p.id+'">Cobrar</button></div><button class="btn danger" data-act="ped-cancel" data-id="'+p.id+'" style="margin-top:6px">Cancelar pedido</button>':
    '<div class="help" style="margin:6px 0 0">'+({cobrado:'✅ Cobrado',cancelado:'✖ Cancelado'}[st]||st)+'</div>')+'</div>';
 }
+var VST={d:null,t:0,err:false};
+function vstLoad(){
+  if(Date.now()-VST.t<60000)return;VST.t=Date.now();
+  sbToken().then(function(tk){return sbReq('/rest/v1/rpc/visit_stats',{method:'POST',body:{}},tk);}).then(function(j){VST.d=j;VST.err=false;if(ui.tab==='ped')render();}).catch(function(){VST.err=true;if(ui.tab==='ped')render();});
+}
+function vstCard(){
+  if(!(sbOn()&&sess&&sess.role==='admin'))return '';
+  vstLoad();
+  var d=VST.d;
+  if(!d)return '<div class="card"><h4>Visitas a la tienda</h4><p class="help" style="margin:0">'+(VST.err?'No se pudieron cargar las estadísticas.':'Cargando…')+'</p></div>';
+  function row(l,x){x=x||{};var pe=x.personas||0,pd=x.pedidos||0,pc=pe>0?Math.min(100,Math.round(pd*100/pe))+' %':'—';
+    return '<div class="row"><span>'+l+'</span><span><b>'+pe+'</b> personas · '+(x.visitas||0)+' visitas · <b>'+pd+'</b> pedidos · compra <b>'+pc+'</b></span></div>';}
+  var refs=(d.refs||[]).map(function(r){return esc(r.ref)+' ('+r.n+')';}).join(' · ');
+  return '<div class="card"><h4>Visitas a la tienda</h4>'+row('Hoy',d.hoy)+row('Últimos 7 días',d.semana)+row('Últimos 30 días',d.mes)+
+    '<p class="help" style="margin:8px 0 0">Personas = dispositivos distintos. Compra = pedidos entre personas.'+(d.desde?' Se cuenta desde el '+shortDate(Date.parse(d.desde))+'.':' Aún no hay visitas registradas.')+'</p>'+
+    (refs?'<p class="help" style="margin:4px 0 0">Vienen de: '+refs+'</p>':'')+'</div>';
+}
 function viewPed(){
   var all=pedList().sort(function(a,b){return b.ts-a.ts;});
   var nu=all.filter(function(p){var s=pedSt(p);return s==='nuevo';}),old=all.filter(function(p){return pedSt(p)!=='nuevo';}).slice(0,30);
-  var h='<div class="card"><h4>Tienda en línea</h4><p class="help" style="margin:0">'+(S.settings.shopOn?'La tienda está <b>abierta</b>. Cada pedido reserva la mercancía por '+(S.settings.holdH||24)+' horas y también te llega a WhatsApp.':'La tienda está <b>cerrada</b>. Ábrela en Ajustes → Tienda en línea.')+'</p></div>';
+  var h=vstCard()+'<div class="card"><h4>Tienda en línea</h4><p class="help" style="margin:0">'+(S.settings.shopOn?'La tienda está <b>abierta</b>. Cada pedido reserva la mercancía por '+(S.settings.holdH||24)+' horas y también te llega a WhatsApp.':'La tienda está <b>cerrada</b>. Ábrela en Ajustes → Tienda en línea.')+'</p></div>';
   h+='<h4 class="sec">Por atender ('+nu.length+')</h4>'+(nu.length?nu.map(pedCard).join(''):'<p class="muted" style="margin:0 2px 10px">No hay pedidos nuevos.</p>');
   if(old.length)h+='<h4 class="sec">Anteriores</h4>'+old.map(pedCard).join('');
   return h;
