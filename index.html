@@ -159,15 +159,16 @@ header{background:var(--hdr)}
 .lockbox input.txt{font-size:16px;letter-spacing:0;text-align:left;margin-bottom:8px}
 .lockbox .help{margin:0 0 8px}
 
-.vst{--vs:#2f5fae;--vsbg:#eaf0fb;background:var(--vsbg);border:1px solid color-mix(in srgb,var(--vs) 30%,transparent);border-left:5px solid var(--vs);border-radius:12px;padding:8px 12px;margin-bottom:10px}
-:root[data-theme="dark"] .vst{--vs:#7fa8ee;--vsbg:#1a2436}
-.vsth{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:13px;font-weight:700;color:var(--vs)}
+.vst{--vs:var(--mango,#F4A62A);--vst:#9a5b00;background:color-mix(in srgb,var(--vs) 16%,var(--card));border:1px solid color-mix(in srgb,var(--vs) 45%,transparent);border-left:5px solid var(--vs);border-radius:12px;padding:8px 12px;margin-bottom:10px}
+:root[data-theme="dark"] .vst{--vst:#f4b95a}
+.vsth{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:13px;font-weight:700;color:var(--vst)}
 .vsth small{font-weight:400;font-size:11px;color:var(--muted)}
 .vsg{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;text-align:center;margin-top:4px}
 .vsg small{display:block;font-size:11px;color:var(--muted)}
 .vsg b{display:block;font-size:20px;line-height:1.1;color:var(--ink)}
+.vsg b i{font-style:normal;font-weight:400;font-size:11px;color:var(--muted)}
 .vsg span{display:block;font-size:11.5px;color:var(--ink)}
-.vsg em{display:block;font-style:normal;font-size:11.5px;font-weight:700;color:var(--vs)}
+.vsg em{display:block;font-style:normal;font-size:11.5px;font-weight:700;color:var(--vst)}
 .vsr{font-size:11px;color:var(--muted);margin-top:4px}
 </style>
 </head>
@@ -1116,8 +1117,8 @@ function vstCard(){
   vstLoad();
   var d=VST.d;
   if(!d)return '<div class="vst"><div class="vsth"><span>📊 Visitas a la tienda</span></div><div class="vsr">'+(VST.err?'No se pudieron cargar.':'Cargando…')+'</div></div>';
-  function col(l,x){x=x||{};var pe=x.personas||0,pd=x.pedidos||0,pc=pe>0?Math.min(100,Math.round(pd*100/pe))+' %':'—';
-    return '<div><small>'+l+'</small><b>'+pe+'</b><span>'+pd+(pd===1?' pedido':' pedidos')+'</span><em>compra '+pc+'</em></div>';}
+  function col(l,x){x=x||{};var pe=x.personas||0,vi=x.visitas||0,pd=x.pedidos||0,pc=pe>0?Math.min(100,Math.round(pd*100/pe))+' %':'—';
+    return '<div><small>'+l+'</small><b>'+pe+'<i> personas</i></b><span>'+vi+(vi===1?' visita':' visitas')+'</span><span>'+pd+(pd===1?' pedido':' pedidos')+'</span><em>compra '+pc+'</em></div>';}
   var refs=(d.refs||[]).slice(0,3).map(function(r){return esc(r.ref)+' '+r.n;}).join(' · ');
   return '<div class="vst"><div class="vsth"><span>📊 Visitas a la tienda</span><small>personas distintas'+(d.desde?' · desde '+shortDate(Date.parse(d.desde)):'')+'</small></div>'+
     '<div class="vsg">'+col('Hoy',d.hoy)+col('7 días',d.semana)+col('30 días',d.mes)+'</div>'+
