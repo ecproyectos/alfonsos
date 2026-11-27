@@ -970,7 +970,7 @@ function openExpense(){
 /* ---------- INVERSIÓN ---------- */
 function investList(kind){return Object.keys(S.invest).map(function(k){return S.invest[k];}).filter(function(r){return !r.del&&r.kind===kind;}).sort(function(a,b){return a.ts-b.ts;});}
 function openTs(){var t=Infinity,k,x;for(k in S.sales){x=S.sales[k];if(!x.del&&x.ts<t)t=x.ts;}return t;}
-function mercInicial(){var t=0,ar=0,n={},k,e,o=openTs(),c;for(k in S.entries){e=S.entries[k];if(e.del)continue;if(e.type==='inicial'||(e.type==='entrada'&&e.ts<o)){c=e.qty*(e.cost||0);t+=c;n[e.pid]=1;if(S.products[e.pid]&&S.products[e.pid].del)ar+=c;}}return {total:r2(t),n:Object.keys(n).length,arch:r2(ar)};}
+function mercInicial(){var t=0,ar=0,n={},k,e,o=openTs(),c;for(k in S.entries){e=S.entries[k];if(e.del)continue;if((e.type==='inicial'||e.type==='entrada')&&e.ts<o){c=e.qty*(e.cost||0);t+=c;n[e.pid]=1;if(S.products[e.pid]&&S.products[e.pid].del)ar+=c;}}return {total:r2(t),n:Object.keys(n).length,arch:r2(ar)};}
 function profitToDate(){
   var days={},k;
   for(k in S.sales){if(!S.sales[k].del)days[S.sales[k].day]=1;}
@@ -995,7 +995,7 @@ function viewInvest(){
   h+='<div class="card" style="padding-bottom:10px"><h4>En qué se invirtió</h4>'+ga.map(function(g){
     return '<button class="item" data-act="inv-edit" data-id="'+g.id+'"><div><b>'+esc(g.desc)+'</b><small>'+shortDate(g.ts)+(g.usd?' · '+fmt(g.usd)+' USD × '+fmt(g.rate):'')+'</small></div><b>'+money(g.amount)+'</b></button>';
   }).join('')+(mi.n?row('Mercancía inicial <small class="muted">('+mi.n+' productos)</small>',money(mi.total))+(mi.arch>0?'<p class="help" style="margin:4px 0 8px">Incluye '+money(mi.arch)+' de productos agotados. Revísalos en Inventario → Agotados.</p>':''):'')+row('Total invertido',money(tInv),'sum')+'<button class="btn" data-act="inv-gasto" style="width:100%;margin-top:8px">+ Agregar gasto de inversión</button></div>';
-  var opened=openTs(),reinv=opened===Infinity?0:r2(sum(Object.keys(S.entries).map(function(k){return S.entries[k];}).filter(function(e){return !e.del&&e.type==='entrada'&&e.ts>=opened;}),function(e){return e.qty*(e.cost||0);}));
+  var opened=openTs(),reinv=opened===Infinity?0:r2(sum(Object.keys(S.entries).map(function(k){return S.entries[k];}).filter(function(e){return !e.del&&(e.type==='entrada'||e.type==='inicial')&&e.ts>=opened;}),function(e){return e.qty*(e.cost||0);}));
   h+='<div class="card"><h4>Reinversión</h4>'+(opened===Infinity?'<p class="help" style="margin:0">El mercado aún no ha abierto: lo que compres ahora cuenta como <b>mercancía inicial</b>. Cuando haya ventas, las compras nuevas que registres con <b>+ Entrada</b> aparecerán aquí como reinversión.</p>':row('Mercancía comprada después de abrir',money(reinv),'sum')+'<p class="help" style="margin:6px 0 0">Sale del dinero de las ventas, así que no hay que anotarla como aporte.</p>')+'</div>';
   h+='<div class="card"><h4>Recuperación de la inversión</h4>'+row('Ganancia neta acumulada','<span class="'+(prof>=0?'pos':'neg')+'">'+money(prof)+'</span>')+row('Por recuperar',money(Math.max(pend,0)),'sum')+
     '<div style="height:12px;background:var(--bg);border-radius:6px;overflow:hidden;margin:10px 0 4px"><div style="height:100%;width:'+pct+'%;background:var(--brand)"></div></div><div class="muted" style="font-size:14px">'+(tInv>0&&prof>=tInv?'Inversión recuperada 🎉':pct+'% recuperado')+'</div></div>';
