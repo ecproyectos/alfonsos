@@ -795,8 +795,8 @@ function openEntry(id){
   updateEsug();
   setTimeout(function(){var e=$('#e-qty');if(e)e.focus();},60);
 }
-function fundSel(id){return openTs()===Infinity?'':'<label>¿Con qué dinero se compró?<select id="'+id+'"><option value="ventas">Dinero de las ventas · efectivo</option><option value="tr">Dinero de las ventas · transferencia</option><option value="aporte">Dinero nuevo (aporte de capital)</option></select></label>';}
-function fundExtra(v){return v==='aporte'?{fund:'aporte'}:v==='tr'?{pay:'tr'}:{};}
+function fundSel(id){return openTs()===Infinity?'':'<label>¿Con qué dinero se compró?<select id="'+id+'"><option value="fcup">Fondo de inversión · efectivo</option><option value="ftr">Fondo de inversión · transferencia</option><option value="cup">Efectivo de la caja</option><option value="aporte">Dinero nuevo (aporte de capital)</option></select></label>';}
+function fundExtra(v){return v==='aporte'?{fund:'aporte'}:v==='ftr'||v==='cup'?{pay:v}:{pay:'fcup'};}
 function fundOf(e){return e.fund==='aporte'?'aporte':'ventas';}
 function entryCost(){var c=num(val('e-cost'));return val('e-ccur')==='USD'?r2(c*rate()):c;}
 function updateEsug(){
@@ -943,46 +943,57 @@ function dayStats(day){
   return {sales:sales,exps:exps,total:total,cogs:cogs,gross:gross,cupNet:cupNet,usd:usd,tr:tr,comm:comm,pay:pay,rent:rent,ex:ex,net:net};
 }
 
-/* ---------- caja y arqueo ---------- */
-var ACCT={cup:'Efectivo CUP',usd:'Dólares',tr:'Transferencias'};
+/* ---------- caja, arqueo y fondo de inversión ---------- */
+var ACCT={cup:'Caja · efectivo',usd:'Caja · dólares',tr:'Caja · transferencias',fcup:'Fondo · efectivo',fusd:'Fondo · dólares',ftr:'Fondo · transferencias'};
 function z3(){return {cup:0,usd:0,tr:0};}
+function isF(a){return a==='fcup'||a==='fusd'||a==='ftr';}
 function eod(day){return new Date(day+'T23:59:59.999').getTime();}
+function arqList(){return Object.keys(S.caja).map(function(k){return S.caja[k];}).filter(function(c){return !c.del&&c.kind==='arqueo';}).sort(function(a,b){return a.ts-b.ts;});}
 function lastArq(T){var b=null,k,c;for(k in S.caja){c=S.caja[k];if(c.del||c.kind!=='arqueo'||c.ts>T)continue;if(!b||c.ts>b.ts)b=c;}return b;}
-function cajaCalc(T,from){
-  var a=from===undefined?lastArq(T):null,t0=from!==undefined?from:a?a.ts:-Infinity,o=openTs();
-  var R={arq:a,t0:t0,base:a?Object.assign(z3(),a.cnt):z3(),ven:z3(),gas:z3(),com:z3(),min:z3(),mout:z3(),exp:z3(),pagos:0};
-  function inR(ts){return ts>t0&&ts<=T;}
+function entPay(x){return x.pay==='tr'?'tr':x.pay==='cup'?'cup':x.pay==='ftr'?'ftr':'fcup';}
+function expAcct(x){return x.acct==='fuera'?null:x.acct||'cup';}
+function cajaCalc(T){
+  var a=lastArq(T),t0=a?a.ts:-Infinity,o=openTs(),f0=(arqList()[0]||{ts:Infinity}).ts;
+  var R={arq:a,t0:t0,base:a?Object.assign(z3(),a.cnt):z3(),ven:z3(),gas:z3(),com:z3(),min:z3(),mout:z3(),exp:z3(),fondo:z3()};
+  function inR(ts){return ts>t0&&ts<=T;} function inF(ts){return ts>=f0&&ts<=T;}
+  function add(acc,c,v,ts,gasKey){if(isF(acc)){if(inF(ts))R.fondo[acc.slice(1)]+=v;}else if(inR(ts)){if(gasKey){R[gasKey][acc]-=v;}else if(v>=0)R.min[acc]+=v;else R.mout[acc]-=v;}}
   var k,x;
   for(k in S.sales){x=S.sales[k];if(x.del||!inR(x.ts))continue;R.ven.cup+=(x.pay.cup||0)-(x.change||0);R.ven.usd+=x.pay.usd||0;R.ven.tr+=x.pay.tr||0;}
-  for(k in S.expenses){x=S.expenses[k];if(x.del||!inR(x.ts)||x.acct==='fuera')continue;R.gas[x.acct==='tr'?'tr':'cup']+=x.amount;}
-  for(k in S.entries){x=S.entries[k];if(x.del||!inR(x.ts)||x.ts<o||x.fund==='aporte'||(x.type!=='entrada'&&x.type!=='inicial'))continue;R.com[x.pay==='tr'?'tr':'cup']+=x.qty*(x.cost||0);}
-  for(k in S.caja){x=S.caja[k];if(x.del||x.kind!=='mov'||!inR(x.ts))continue;if(x.amount>=0)R.min[x.acct]+=x.amount;else R.mout[x.acct]-=x.amount;}
-  ['cup','usd','tr'].forEach(function(c){R.exp[c]=r2(R.base[c]+R.ven[c]+R.min[c]-R.gas[c]-R.com[c]-R.mout[c]);});
+  for(k in S.expenses){x=S.expenses[k];var ea=expAcct(x);if(x.del||!ea)continue;add(ea,0,-x.amount,x.ts,'gas');}
+  for(k in S.entries){x=S.entries[k];if(x.del||x.ts<o||x.fund==='aporte'||(x.type!=='entrada'&&x.type!=='inicial'))continue;add(entPay(x),0,-x.qty*(x.cost||0),x.ts,'com');}
+  for(k in S.caja){x=S.caja[k];if(x.del||x.kind!=='mov')continue;add(x.acct,0,x.amount,x.ts);}
+  ['cup','usd','tr'].forEach(function(c){R.exp[c]=r2(R.base[c]+R.ven[c]+R.min[c]-R.gas[c]-R.com[c]-R.mout[c]);R.fondo[c]=r2(R.fondo[c]);});
   return R;
 }
 function eqCUP(o){return r2(o.cup+o.tr+o.usd*rate());}
+function lst(o){var t=[];if(o.cup)t.push(fmt(o.cup)+' CUP');if(o.usd)t.push(fmt(o.usd)+' USD');if(o.tr)t.push(fmt(o.tr)+' transf.');return t.join(' · ')||'0';}
 function cajaCard(day){
-  var today=dayKey(Date.now()),T=day===today?Date.now():eod(day),R=cajaCalc(T),E=R.exp;
-  var h='<div class="card"><h4>Dinero en caja '+(day===today?'ahora':'al cerrar ese día')+'</h4>'+row(ACCT.cup,money(E.cup))+row(ACCT.usd,fmt(E.usd)+' USD')+row(ACCT.tr,money(E.tr))+row('Total (dólares a '+fmt(rate())+')',money(eqCUP(E)),'sum');
-  h+='<p class="help" style="margin:6px 0 8px">'+(R.arq?'Desde el arqueo del '+shortDate(R.arq.ts)+' a las '+hhmm(R.arq.ts)+': ':'Aún no hay arqueos. Haz el primero contando todo el dinero: ese será el saldo de partida. ')+'</p>';
-  if(R.arq){var rr=function(l,o,neg){var t=[];if(o.cup)t.push(fmt(o.cup)+' CUP');if(o.usd)t.push(fmt(o.usd)+' USD');if(o.tr)t.push(fmt(o.tr)+' transf.');return t.length?row((neg?'− ':'+ ')+l,t.join(' · '),neg?'sub':''):'';};
-    h+=row('Contado en el arqueo',[fmt(R.base.cup)+' CUP',R.base.usd?fmt(R.base.usd)+' USD':'',R.base.tr?fmt(R.base.tr)+' transf.':''].filter(Boolean).join(' · '))+rr('Ventas',R.ven)+rr('Entradas de dinero',R.min)+rr('Gastos',R.gas,1)+rr('Compras de mercancía',R.com,1)+rr('Pagos y salidas',R.mout,1);}
-  if(day===today)h+='<button class="btn primary" data-act="arq-open" style="width:100%;margin-top:8px">Hacer arqueo</button>';
-  h+='<button class="btn" data-act="mov-new" style="width:100%;margin-top:8px">+ Pago o movimiento de caja</button>';
-  var movs=Object.keys(S.caja).map(function(k){return S.caja[k];}).filter(function(c){return !c.del&&c.kind==='mov'&&c.day===day;}).sort(function(a,b){return b.ts-a.ts;});
-  if(movs.length)h+='<div style="margin-top:10px">'+movs.map(function(m){return '<div class="row"><span>'+esc(m.desc)+' <small class="muted">'+hhmm(m.ts)+' · '+ACCT[m.acct]+'</small></span><span class="'+(m.amount<0?'neg':'pos')+'">'+(m.amount<0?'−':'+')+(m.acct==='usd'?fmt(Math.abs(m.amount))+' USD':money(Math.abs(m.amount)))+' <button class="chip" data-act="mov-del" data-id="'+m.id+'">✕</button></span></div>';}).join('')+'</div>';
+  var today=dayKey(Date.now()),T=day===today?Date.now():eod(day),R=cajaCalc(T),E=R.exp,F=R.fondo;
+  var h='<div class="card"><h4>Caja '+(day===today?'ahora':'al cerrar ese día')+'</h4>'+row('Efectivo CUP',money(E.cup))+row('Dólares',fmt(E.usd)+' USD')+row('Transferencias',money(E.tr))+row('Total',money(eqCUP(E)),'sum');
+  h+='<p class="help" style="margin:6px 0 8px">'+(R.arq?'Desde el arqueo del '+shortDate(R.arq.ts)+' a las '+hhmm(R.arq.ts)+'.':'Aún no hay arqueos. Haz el primero contando todo el dinero: ese será el saldo de partida.')+'</p>';
+  if(R.arq){var rr=function(l,o,neg){var t=lst(o);return t!=='0'?row((neg?'− ':'+ ')+l,t,neg?'sub':''):'';};
+    h+=row('Quedó después del arqueo',lst(R.base))+rr('Ventas',R.ven)+rr('Entradas',R.min)+rr('Gastos',R.gas,1)+rr('Compras',R.com,1)+rr('Pagos y pases al fondo',R.mout,1);}
+  var la=lastArq(Date.now());
+  if(day===today){
+    if(la&&!la.closed)h+='<button class="btn primary" data-act="close-open" style="width:100%;margin-top:8px">Cerrar caja: pagos y pase al fondo</button>';
+    h+='<button class="btn'+(la&&!la.closed?'':' primary')+'" data-act="arq-open" style="width:100%;margin-top:8px">Hacer arqueo</button>';
+  }
+  h+='<button class="btn" data-act="mov-new" style="width:100%;margin-top:8px">+ Pago o movimiento</button>';
+  var movs=Object.keys(S.caja).map(function(k){return S.caja[k];}).filter(function(c){return !c.del&&c.kind==='mov'&&c.day===day&&!(c.grp&&isF(c.acct)&&c.cat==='tofondo')&&!(c.grp&&!isF(c.acct)&&c.cat==='fromfondo');}).sort(function(a,b){return b.ts-a.ts;});
+  if(movs.length)h+='<div style="margin-top:10px">'+movs.map(function(m){var u=m.acct==='usd'||m.acct==='fusd';return '<div class="row"><span>'+esc(m.desc)+' <small class="muted">'+hhmm(m.ts)+' · '+ACCT[m.acct]+'</small></span><span class="'+(m.amount<0?'neg':'pos')+'">'+(m.amount<0?'−':'+')+(u?fmt(Math.abs(m.amount))+' USD':money(Math.abs(m.amount)))+' <button class="chip" data-act="mov-del" data-id="'+m.id+'">✕</button></span></div>';}).join('')+'</div>';
   h+='</div>';
-  var arqs=Object.keys(S.caja).map(function(k){return S.caja[k];}).filter(function(c){return !c.del&&c.kind==='arqueo';}).sort(function(a,b){return b.ts-a.ts;});
+  h+='<div class="card"><h4>Fondo de inversión (guardado)</h4>'+row('Efectivo',money(F.cup))+row('Dólares',fmt(F.usd)+' USD')+row('Transferencias',money(F.tr))+row('Total',money(eqCUP(F)),'sum')+'<p class="help" style="margin:6px 0 0">Recibe lo que sobra de la caja al cerrar. De aquí salen las compras de mercancía, otros gastos y, más adelante, los repartos.</p></div>';
+  var arqs=arqList().reverse();
   if(arqs.length){var acc=0;arqs.forEach(function(a){if(!a.first)acc+=eqCUP(a.dif);});acc=r2(acc);
     h+='<div class="card"><h4>Arqueos</h4>'+row('Diferencia acumulada','<span class="'+(acc<0?'neg':acc>0?'pos':'')+'">'+(acc<0?'Faltan ':acc>0?'Sobran ':'')+money(Math.abs(acc))+'</span>','sum')+arqs.slice(0,10).map(function(a){var d=eqCUP(a.dif);return '<div class="row"><span>'+shortDate(a.ts)+' '+hhmm(a.ts)+(a.who?' <small class="muted">· '+esc(a.who.split('@')[0])+'</small>':'')+(a.note?'<br><small class="muted">'+esc(a.note)+'</small>':'')+'</span><span>'+(a.first?'<small class="muted">Saldo inicial</small> '+money(eqCUP(a.cnt)):Math.abs(d)<0.5?'<span class="pos">Cuadra</span>':'<span class="'+(d<0?'neg':'pos')+'">'+(d<0?'Faltan ':'Sobran ')+money(Math.abs(d))+'</span>')+'</span></div>';}).join('')+'</div>';}
   return h;
 }
 function openArqueo(){
   var R=cajaCalc(Date.now()),E=R.exp;ui.arq={exp:E,first:!R.arq};
-  openModal('<h3>Arqueo de caja</h3><p class="help">'+(R.arq?'Cuenta el dinero y escribe lo que hay de verdad. La app lo compara con lo que debería haber.':'Primer arqueo: cuenta todo el dinero. Será el saldo de partida.')+'</p>'+
+  openModal('<h3>Arqueo de caja</h3><p class="help">'+(R.arq?'Cuenta el dinero de la caja y escribe lo que hay de verdad.':'Primer arqueo: cuenta todo el dinero. Será el saldo de partida.')+'</p>'+
     '<label>Efectivo CUP contado'+(R.arq?' <small class="muted">(debería haber '+fmt(E.cup)+')</small>':'')+'<input id="q-cup" inputmode="decimal"></label>'+
     '<label>Dólares contados'+(R.arq?' <small class="muted">(debería haber '+fmt(E.usd)+')</small>':'')+'<input id="q-usd" inputmode="decimal"></label>'+
-    '<label>Saldo de la cuenta de transferencias'+(R.arq?' <small class="muted">(debería haber '+fmt(E.tr)+')</small>':'')+'<input id="q-tr" inputmode="decimal"></label>'+
+    '<label>Transferencias recibidas'+(R.arq?' <small class="muted">(debería haber '+fmt(E.tr)+')</small>':'')+'<input id="q-tr" inputmode="decimal"></label>'+
     '<div class="card" id="q-prev"></div><label>Nota<input id="q-note" autocomplete="off" placeholder="Opcional"></label><button class="btn primary big" data-act="arq-save">Guardar arqueo</button>');
   arqPrev();setTimeout(function(){var e=$('#q-cup');if(e)e.focus();},60);
 }
@@ -992,14 +1003,31 @@ function arqPrev(){
   if(ui.arq.first){b.innerHTML=row('Total contado',money(eqCUP(c)),'sum');return;}
   var d={cup:r2(c.cup-E.cup),usd:r2(c.usd-E.usd),tr:r2(c.tr-E.tr)},f=function(v,u){return Math.abs(v)<0.005?'<span class="pos">cuadra</span>':'<span class="'+(v<0?'neg':'pos')+'">'+(v<0?'faltan ':'sobran ')+fmt(Math.abs(v))+' '+u+'</span>';};
   var t=eqCUP(d);
-  b.innerHTML=row(ACCT.cup,f(d.cup,'CUP'))+row(ACCT.usd,f(d.usd,'USD'))+row(ACCT.tr,f(d.tr,'CUP'))+row('Total',Math.abs(t)<0.5?'<span class="pos">Cuadra</span>':'<span class="'+(t<0?'neg':'pos')+'">'+(t<0?'Faltan ':'Sobran ')+money(Math.abs(t))+'</span>','sum');
+  b.innerHTML=row('Efectivo CUP',f(d.cup,'CUP'))+row('Dólares',f(d.usd,'USD'))+row('Transferencias',f(d.tr,'CUP'))+row('Total',Math.abs(t)<0.5?'<span class="pos">Cuadra</span>':'<span class="'+(t<0?'neg':'pos')+'">'+(t<0?'Faltan ':'Sobran ')+money(Math.abs(t))+'</span>','sum');
 }
+function closeFondo(){var v=0;try{v=+localStorage.getItem('mercado.fondoCambio');}catch(e){}return v>0?v:3000;}
+function openClose(){
+  var a=lastArq(Date.now());if(!a){toast('Primero haz el arqueo');return;}
+  var d=dayKey(a.ts),st=dayStats(d),E=Object.assign(z3(),a.cnt);
+  ui.close={id:a.id,day:d,E:E};
+  openModal('<h3>Cerrar caja</h3><p class="help">Contado en el arqueo del '+shortDate(a.ts)+': <b>'+lst(E)+'</b>. Se pagan salario, comisión y renta, se deja el fondo de cambio y el resto pasa al fondo de inversión.</p>'+
+    '<label>Salario<input id="c-pay" inputmode="decimal" value="'+(S.settings.dailyPay||0)+'"></label>'+
+    '<label>Comisión ('+(S.settings.commission||0)+'% de '+fmt(st.total)+')<input id="c-comm" inputmode="decimal" value="'+r2(st.comm)+'"></label>'+
+    '<label>Renta<input id="c-rent" inputmode="decimal" value="'+(S.settings.dailyRent||0)+'"></label>'+
+    '<label>Fondo de cambio que se queda en la caja<input id="c-keep" inputmode="decimal" value="'+closeFondo()+'"></label>'+
+    '<div class="card" id="c-prev"></div><button class="btn primary big" data-act="close-save">Confirmar cierre</button>');
+  closePrev();
+}
+function closeVals(){var C=ui.close;if(!C)return null;var p=num(val('c-pay')),c=num(val('c-comm')),r=num(val('c-rent')),k=num(val('c-keep'));return {p:p,c:c,r:r,k:k,cup:r2(C.E.cup-p-c-r-k),usd:C.E.usd,tr:C.E.tr};}
+function closePrev(){var b=$('#c-prev'),v=closeVals();if(!b||!v)return;b.innerHTML='<div class="row sum"><span>Pasa al fondo de inversión</span><span></span></div>'+row('Efectivo','<span class="'+(v.cup<0?'neg':'')+'">'+money(v.cup)+'</span>')+(v.usd?row('Dólares',fmt(v.usd)+' USD'):'')+(v.tr?row('Transferencias',money(v.tr)):'')+(v.cup<0?'<p class="help" style="color:var(--tom)">No alcanza el efectivo para todos los pagos y el fondo de cambio. Revisa los montos.</p>':'');}
+function mv(ts,day,cat,acct,amount,desc,grp){var o={id:uid(),kind:'mov',ts:ts,day:day,cat:cat,acct:acct,amount:r2(amount),desc:desc};if(grp)o.grp=grp;put('caja',o);}
 function openMov(){
   var dp=S.settings.dailyPay||0,dr=S.settings.dailyRent||0;
-  openModal('<h3>Pago o movimiento de caja</h3><label>Qué es<select id="m-cat"><option value="salario" data-a="'+dp+'">Pago de salario</option><option value="alquiler" data-a="'+dr+'">Pago de alquiler</option><option value="salida" data-a="">Otra salida de dinero</option><option value="entrada" data-a="">Entrada de dinero (fondo, cambio…)</option></select></label>'+
-    '<label>De qué dinero<select id="m-acct"><option value="cup">Efectivo CUP</option><option value="usd">Dólares</option><option value="tr">Transferencia</option></select></label>'+
+  openModal('<h3>Pago o movimiento</h3><label>Qué es<select id="m-cat"><option value="salario" data-a="'+dp+'">Pago de salario</option><option value="comision" data-a="">Pago de comisión</option><option value="alquiler" data-a="'+dr+'">Pago de renta</option><option value="salida" data-a="">Otra salida de dinero</option><option value="entrada" data-a="">Entrada de dinero</option><option value="tofondo" data-a="">Pasar de la caja al fondo</option><option value="fromfondo" data-a="">Sacar del fondo a la caja</option><option value="reparto" data-a="">Reparto de utilidades / devolución de inversión</option></select></label>'+
+    '<label>Dinero<select id="m-acct"><option value="cup">Efectivo</option><option value="usd">Dólares</option><option value="tr">Transferencia</option></select></label>'+
+    '<label>De dónde<select id="m-src"><option value="caja">Caja</option><option value="fondo">Fondo de inversión</option></select></label>'+
     '<label>Monto<input id="m-amt" inputmode="decimal" value="'+(dp||'')+'"></label><label>Nota<input id="m-note" autocomplete="off" placeholder="Opcional"></label>'+
-    '<p class="help">Los pagos de salario y alquiler solo restan dinero de la caja: ya se descuentan de la ganancia en el cierre.</p><button class="btn primary big" data-act="mov-save">Guardar</button>');
+    '<p class="help">Salario, comisión y renta solo mueven dinero: ya se descuentan de la ganancia en el cierre.</p><button class="btn primary big" data-act="mov-save">Guardar</button>');
 }
 function viewCierre(){
   var day=ui.day;
@@ -1028,7 +1056,7 @@ function openTicket(id){
   '<button class="btn danger big" data-act="void" data-id="'+id+'">Anular venta</button>');
 }
 function openExpense(){
-  openModal('<h3>Nuevo gasto</h3><label>Descripción<input id="x-desc" autocomplete="off" placeholder="Transporte, bolsas, luz…"></label><label>Monto (CUP)<input id="x-amt" inputmode="decimal"></label><label>Se pagó con<select id="x-acct"><option value="cup">Efectivo de la caja</option><option value="tr">Transferencia</option><option value="fuera">Dinero de fuera de la caja</option></select></label><button class="btn primary big" data-act="exp-save">Guardar gasto</button>');
+  openModal('<h3>Nuevo gasto</h3><label>Descripción<input id="x-desc" autocomplete="off" placeholder="Transporte, bolsas, luz…"></label><label>Monto (CUP)<input id="x-amt" inputmode="decimal"></label><label>Se pagó con<select id="x-acct"><option value="cup">Efectivo de la caja</option><option value="fcup">Fondo de inversión · efectivo</option><option value="ftr">Fondo de inversión · transferencia</option><option value="fuera">Dinero de fuera (no del negocio)</option></select></label><button class="btn primary big" data-act="exp-save">Guardar gasto</button>');
   setTimeout(function(){var e=$('#x-desc');if(e)e.focus();},60);
 }
 
@@ -1391,11 +1419,26 @@ var H={
   'arq-save':function(){var A=ui.arq;if(!A)return;var c=arqCnt(),ts=Date.now();if(val('q-cup')===''&&val('q-usd')===''&&val('q-tr')===''){toast('Escribe lo que contaste');return;}
     var d={cup:r2(c.cup-A.exp.cup),usd:r2(c.usd-A.exp.usd),tr:r2(c.tr-A.exp.tr)};
     put('caja',Object.assign({id:uid(),kind:'arqueo',ts:ts,day:dayKey(ts),cnt:c,exp:A.exp,dif:d,note:val('q-note').trim(),who:sess&&sess.email||''},A.first?{first:true}:{}));
-    ui.arq=null;closeModal();var t=eqCUP(d);toast(A.first?'Saldo inicial guardado':Math.abs(t)<0.5?'Arqueo guardado: la caja cuadra':'Arqueo guardado: '+(t<0?'faltan ':'sobran ')+money(Math.abs(t)));},
+    ui.arq=null;closeModal();var t=eqCUP(d);toast(A.first?'Saldo inicial guardado':Math.abs(t)<0.5?'Arqueo guardado: la caja cuadra':'Arqueo guardado: '+(t<0?'faltan ':'sobran ')+money(Math.abs(t)));
+    setTimeout(openClose,350);},
+  'close-open':openClose,
+  'close-save':function(){var C=ui.close,v=closeVals();if(!C||!v)return;if(v.cup<0){toast('No alcanza el efectivo: revisa los montos');return;}
+    var ts=Date.now(),d=C.day,g=uid();
+    if(v.p>0)mv(ts,d,'salario','cup',-v.p,'Pago de salario');
+    if(v.c>0)mv(ts,d,'comision','cup',-v.c,'Pago de comisión');
+    if(v.r>0)mv(ts,d,'alquiler','cup',-v.r,'Pago de renta');
+    [['cup','fcup',v.cup],['usd','fusd',v.usd],['tr','ftr',v.tr]].forEach(function(x){if(x[2]>0){mv(ts,d,'tofondo',x[0],-x[2],'Pase al fondo',g);mv(ts,d,'tofondo',x[1],x[2],'Pase desde la caja',g);}});
+    try{localStorage.setItem('mercado.fondoCambio',String(v.k));}catch(e){}
+    var a=S.caja[C.id];if(a)put('caja',Object.assign({},a,{closed:true}));
+    ui.close=null;closeModal();toast('Caja cerrada. Pasaron '+money(v.cup)+' al fondo');},
   'mov-new':openMov,
-  'mov-save':function(){var cat=val('m-cat'),ac=val('m-acct'),a=num(val('m-amt'));if(!(a>0)){toast('Indica el monto');return;}var nm={salario:'Pago de salario',alquiler:'Pago de alquiler',salida:'Salida de dinero',entrada:'Entrada de dinero'}[cat]||'Movimiento',nt=val('m-note').trim(),ts=Date.now();
-    put('caja',{id:uid(),kind:'mov',ts:ts,day:dayKey(ts),cat:cat,acct:ac==='usd'||ac==='tr'?ac:'cup',amount:cat==='entrada'?a:-a,desc:nm+(nt?' · '+nt:'')});closeModal();toast('Guardado');},
-  'mov-del':function(t){var m=S.caja[t.dataset.id];if(!m)return;put('caja',Object.assign({},m,{del:true}));toast('Movimiento borrado','Deshacer',function(){put('caja',m);});},
+  'mov-save':function(){var cat=val('m-cat'),ac=val('m-acct'),src=val('m-src'),a=num(val('m-amt'));if(!(a>0)){toast('Indica el monto');return;}
+    ac=ac==='usd'||ac==='tr'?ac:'cup';var fa='f'+ac,nt=val('m-note').trim(),ts=Date.now(),d=dayKey(ts),sfx=nt?' · '+nt:'';
+    var nm={salario:'Pago de salario',comision:'Pago de comisión',alquiler:'Pago de renta',salida:'Salida de dinero',entrada:'Entrada de dinero',reparto:'Reparto / devolución'}[cat];
+    if(cat==='tofondo'||cat==='fromfondo'){var g=uid(),to=cat==='tofondo';mv(ts,d,cat,to?ac:fa,-a,(to?'Pase al fondo':'Sacado al fondo de la caja')+sfx,g);mv(ts,d,cat,to?fa:ac,a,(to?'Pase desde la caja':'Traído del fondo')+sfx,g);}
+    else mv(ts,d,cat,src==='fondo'?fa:ac,cat==='entrada'?a:-a,nm+sfx);
+    closeModal();toast('Guardado');},
+  'mov-del':function(t){var m=S.caja[t.dataset.id];if(!m)return;var ms=m.grp?Object.keys(S.caja).map(function(k){return S.caja[k];}).filter(function(x){return x.grp===m.grp&&!x.del;}):[m];ms.forEach(function(x){put('caja',Object.assign({},x,{del:true}));});toast('Movimiento borrado','Deshacer',function(){ms.forEach(function(x){put('caja',x);});});},
 
   'exp-save':function(){var d=val('x-desc').trim(),a=num(val('x-amt'));if(!d||a<=0){toast('Completa descripción y monto');return;}var ts=Date.now();var ac=val('x-acct');put('expenses',Object.assign({id:uid(),ts:ts,day:ui.day,desc:d,amount:a},ac&&ac!=='cup'?{acct:ac}:{}));closeModal();toast('Gasto guardado');},
   'exp-del':function(t){var e=S.expenses[t.dataset.id];if(e)put('expenses',Object.assign({},e,{del:true}));},
@@ -1490,6 +1533,7 @@ document.addEventListener('input',function(e){
   var t=e.target;
   if(t.id==='q'){ui.q=t.value;render();}
   else if(t.id==='q-cup'||t.id==='q-usd'||t.id==='q-tr'){arqPrev();}
+  else if(t.id&&t.id.indexOf('c-')===0){closePrev();}
   else if(t.id==='invq'){ui.invQ=t.value;render();}
   else if(t.classList.contains('lq')||t.classList.contains('lp')){
     var l=ui.cart[+t.dataset.i];if(!l)return;
