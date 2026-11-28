@@ -1050,6 +1050,9 @@ function viewInvest(){
   var pct=tInv>0?Math.max(0,Math.min(100,Math.round(prof/tInv*100))):0;
   var h='<div class="card kpis"><div><small>Aportado</small><b>'+fmt(tAp)+'</b></div><div><small>Invertido</small><b>'+fmt(tInv)+'</b></div><div><small>Aportes − inversión</small><b class="'+(diff>=0?'pos':'neg')+'">'+fmt(diff)+'</b></div></div>';
   if(diff<0)h+='<div class="card" style="background:var(--warnbg);border-color:transparent"><b>Falta cuadrar '+money(-diff)+'.</b> Lo invertido supera lo aportado. Registra los aportes que faltan (otro dinero, préstamo…) para que el balance cuadre.</div>';
+  var nw=new Date(),d0=new Date(nw.getFullYear(),nw.getMonth(),nw.getDate()).getTime(),w0=d0-((nw.getDay()+6)%7)*864e5,m0=new Date(nw.getFullYear(),nw.getMonth(),1).getTime();
+  var per=[['Hoy',d0],['Esta semana',w0],['Este mes',m0]].map(function(x){var v=0,g=0,n=0;Object.keys(S.sales).forEach(function(k){var t=S.sales[k];if(t.del||t.ts<x[1])return;n++;v+=t.total||0;(t.items||[]).forEach(function(l){g+=l.qty*((l.price||0)-(l.cost||0));});});return {l:x[0],v:r2(v),g:r2(g),n:n};});
+  h+='<div class="card"><h4>Ventas</h4>'+per.map(function(p){return row(p.l+' <small class="muted">· '+p.n+' ticket'+(p.n===1?'':'s')+'</small>',money(p.v)+'<br><small class="muted">ganancia bruta '+fmt(p.g)+'</small>');}).join('')+'<p class="help" style="margin:6px 0 0">La semana cuenta desde el lunes y el mes desde el día 1.</p></div>';
   var groups={},order=[],named=false;
   ap.forEach(function(a){var k=a.who||'Sin nombre';if(a.who)named=true;if(!groups[k]){groups[k]={m:0,u:0};order.push(k);}groups[k].m+=a.amount;groups[k].u+=a.usd||0;});
   if(named&&tAp>0)h+='<div class="card"><h4>Por inversionista</h4>'+order.map(function(k){var g=groups[k];return row('<b>'+esc(k)+'</b> <small class="muted">'+Math.round(g.m/tAp*100)+'%</small>',money(g.m)+(g.u?' · '+fmt(g.u)+' USD':''));}).join('')+'</div>';
