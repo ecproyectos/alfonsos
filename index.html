@@ -354,7 +354,8 @@ function $(s,r){return (r||document).querySelector(s);}
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
 function num(v){var n=parseFloat(String(v==null?'':v).replace(/\s/g,'').replace(',','.'));return isFinite(n)?n:0;}
 function r2(n){return Math.round((n+Number.EPSILON)*100)/100;}
-function fmt(n){return Number(r2(n)).toLocaleString('es',{maximumFractionDigits:2,useGrouping:false});}
+function grp(n,d){var s=Number(n).toLocaleString('es',{maximumFractionDigits:d,useGrouping:false}),neg=s[0]==='-';if(neg)s=s.slice(1);var p=s.split(','),i=p[0].replace(/\B(?=(\d{3})+(?!\d))/g,'\u00a0');return (neg?'-':'')+i+(p[1]?','+p[1]:'');}
+function fmt(n){return grp(r2(n),2);}
 function money(n){return fmt(n)+' CUP';}
 function mCUP(n){return '$'+fmt(n);}
 function mUSD(n){return 'US$'+fmt(n);}
@@ -403,7 +404,7 @@ function stockMap(){
 }
 function products(){return Object.keys(S.products).map(function(k){return S.products[k];}).filter(function(p){return !p.del;});}
 function r3(n){return Math.round((n+Number.EPSILON)*1000)/1000;}
-function fmtq(n){return Number(r3(n)).toLocaleString('es',{maximumFractionDigits:3,useGrouping:false});}
+function fmtq(n){return grp(r3(n),3);}
 function stockOf(id){if(!STOCKV){STOCK=stockMap();STOCKV=true;}return r3(STOCK[id]||0);}
 
 /* ---------- sincronización con la nube (opcional) ---------- */

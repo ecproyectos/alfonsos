@@ -122,7 +122,8 @@ var info={name:'Tienda',open:false,wa:'',note:'',hold:24},items=[],cart={},cust=
 function $(s){return document.querySelector(s);}
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
 function ls(k,v){try{if(v===undefined){var r=localStorage.getItem(k);return r?JSON.parse(r):null;}localStorage.setItem(k,JSON.stringify(v));}catch(e){return null;}}
-function money(n){n=Math.round(n*100)/100;return '$'+n.toLocaleString('es',{maximumFractionDigits:2,useGrouping:false});}
+function grp(n,d){var s=Number(n).toLocaleString('es',{maximumFractionDigits:d,useGrouping:false}),neg=s[0]==='-';if(neg)s=s.slice(1);var p=s.split(','),i=p[0].replace(/\B(?=(\d{3})+(?!\d))/g,'\u00a0');return (neg?'-':'')+i+(p[1]?','+p[1]:'');}
+function money(n){n=Math.round(n*100)/100;return '$'+grp(n,2);}
 function ul(it){return it&&it.ul==='lb'?'lb':'kg';}
 function qtyTxt(it,q){return it.unit==='kg'?(Math.round(q*100)/100).toString().replace('.',',')+' '+ul(it):String(q);}
 function step(it){return it.unit==='kg'?0.25:1;}
