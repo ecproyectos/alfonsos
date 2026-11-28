@@ -354,7 +354,7 @@ function $(s,r){return (r||document).querySelector(s);}
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
 function num(v){var n=parseFloat(String(v==null?'':v).replace(/\s/g,'').replace(',','.'));return isFinite(n)?n:0;}
 function r2(n){return Math.round((n+Number.EPSILON)*100)/100;}
-function fmt(n){return Number(r2(n)).toLocaleString('es',{maximumFractionDigits:2});}
+function fmt(n){return Number(r2(n)).toLocaleString('es',{maximumFractionDigits:2,useGrouping:false});}
 function money(n){return fmt(n)+' CUP';}
 function mCUP(n){return '$'+fmt(n);}
 function mUSD(n){return 'US$'+fmt(n);}
@@ -403,7 +403,7 @@ function stockMap(){
 }
 function products(){return Object.keys(S.products).map(function(k){return S.products[k];}).filter(function(p){return !p.del;});}
 function r3(n){return Math.round((n+Number.EPSILON)*1000)/1000;}
-function fmtq(n){return Number(r3(n)).toLocaleString('es',{maximumFractionDigits:3});}
+function fmtq(n){return Number(r3(n)).toLocaleString('es',{maximumFractionDigits:3,useGrouping:false});}
 function stockOf(id){if(!STOCKV){STOCK=stockMap();STOCKV=true;}return r3(STOCK[id]||0);}
 
 /* ---------- sincronización con la nube (opcional) ---------- */
